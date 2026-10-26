@@ -34,7 +34,7 @@ El comando crea los `.env` que falten desde sus ejemplos, instala las dependenci
 
 - Si el contenedor `sosnet-backend` ya está en ejecución, lo reutiliza y no necesita Python.
 - Si no existe, crea `backend/.venv`, instala las dependencias Python e inicia Flask localmente.
-- MySQL aplica `database/schema.sql` y `database/seed.sql` automáticamente cuando el volumen es nuevo.
+- MySQL aplica `database/schema.sql` y `database/seed.sql` automáticamente cuando el volumen es nuevo. Si el volumen ya existía, aplica una sola vez la migración indicada en la sección de base de datos.
 
 La primera ejecución puede tardar varios minutos. MySQL dispone de hasta 10 minutos para inicializar y su healthcheck consulta la base con el usuario de la aplicación antes de arrancar Flask.
 
@@ -63,28 +63,27 @@ Copy-Item .env.example .env
 docker compose up -d mysql
 ```
 
-En un volumen nuevo, MySQL ejecuta automáticamente `schema.sql` y `seed.sql` porque `database/` se monta en `/docker-entrypoint-initdb.d`. Si el volumen ya existía, aplica el esquema manualmente:
+En un volumen nuevo, MySQL ejecuta automáticamente `schema.sql` y `seed.sql` porque `database/` se monta en `/docker-entrypoint-initdb.d`.
+
+Si el volumen ya existía antes de la autenticación real, aplica una sola vez la migración:
 
 ```powershell
-docker compose stop backend
-docker compose cp database/schema.sql mysql:/tmp/schema.sql
-docker compose cp database/seed.sql mysql:/tmp/seed.sql
-docker compose exec -T mysql sh -c "mysql -uroot -proot_dev --default-character-set=utf8mb4 < /tmp/schema.sql"
-docker compose exec -T mysql sh -c "mysql -uroot -proot_dev --default-character-set=utf8mb4 < /tmp/seed.sql"
-docker compose start backend
+Get-Content -Raw database/migrations/001_auth_seguridad.sql | docker compose exec -T mysql mysql -uroot -proot_dev --default-character-set=utf8mb4
 ```
 
-Detener el backend evita que `db.create_all()` cree las tablas primero y luego el SQL agregue claves foráneas duplicadas.
+La migración agrega `correo`, `activo` y `ultimo_acceso` a `Usuarios`, crea `ConfiguracionCentral` y `Actividad`, y carga las cuentas de demostración. No la vuelvas a ejecutar sobre la misma base.
 
-Tablas: `TiposEmergencia`, `Dispositivos`, `SolicitudesSOS`, `RegistrosComunicacion`, `Usuarios` e `HistorialEstados`, con sus claves foráneas e índices únicos.
+Tablas: `TiposEmergencia`, `Dispositivos`, `SolicitudesSOS`, `RegistrosComunicacion`, `Usuarios`, `HistorialEstados`, `ConfiguracionCentral` y `Actividad`.
 
 Datos iniciales:
 
 - 5 tipos de emergencia.
 - Dispositivos `NODE-001`, `NODE-002`, `NODE-003` y `FORMULARIO-SOS`.
-- Usuario de demostración `operador` / `sosnet123` (cambiar en producción) y usuario interno `sistema` para el historial de estados.
+- `operador@sosnet.local` / `OperadorDemo123` — rol operador.
+- `admin@sosnet.local` / `AdminDemo123` — rol administrador.
+- Usuario interno `sistema`, inactivo y sin acceso, para el historial generado por el hardware.
 
-> `db.create_all()` solo crea tablas que no existan; no modifica columnas. Si cambias el modelo durante el desarrollo, aplica el SQL o recrea el volumen `mysql_data`.
+> Cambia ambas contraseñas en producción. `db.create_all()` solo crea tablas que no existan; no modifica columnas. Para cambios de esquema usa una migración de `database/migrations/` o recrea el volumen `mysql_data`.
 
 ## 2. Backend
 
@@ -109,11 +108,30 @@ flask --app run.py run --debug
 
 Comprobar la API en `http://localhost:5000/api/health`. Al arrancar, SQLAlchemy crea las tablas que todavía no existan.
 
+La autenticación usa JWT con tokens de 8 horas. El frontend los guarda en `sessionStorage` y los envía como `Authorization: Bearer <token>`. Los permisos se validan en el backend en cada solicitud.
+
+Variables relevantes de `backend/.env`:
+
+- `SECRET_KEY` y `JWT_SECRET_KEY`: obligatorias y distintas en producción. Si quedan los valores de ejemplo con `FLASK_DEBUG=false`, la API se bloquea con un error de configuración.
+- `FLASK_DEBUG=false` fuera de desarrollo.
+- `CORS_ORIGINS`: lista separada por comas; por defecto `http://localhost:1010,http://localhost:5173`.
+- `JWT_ACCESS_TOKEN_HOURS`: duración del token, por defecto `8`.
+- `SOS_RETENTION_DAYS`: retención de solicitudes, por defecto `90`.
+- `RATELIMIT_ENABLED`: límites de login y envío público de SOS, activos por defecto.
+
 Para ejecutar las pruebas y el análisis estático:
 
 ```powershell
+Set-Location backend
 pytest
-ruff check .
+ruff check app tests
+```
+
+Para eliminar solicitudes antiguas y sus registros asociados:
+
+```powershell
+docker compose exec backend flask --app run.py purge-old-sos --days 90 --dry-run
+docker compose exec backend flask --app run.py purge-old-sos --days 90
 ```
 
 ## 3. Frontend
@@ -132,15 +150,22 @@ Abrir `http://localhost:1010`. Vite redirige `/api` al backend durante el desarr
 - `http://localhost:1010` — centro de operaciones para el equipo de rescate.
 - `http://localhost:1010/sos` — formulario de solicitud de auxilio para la persona afectada.
 
-La pantalla de acceso permite entrar como operador o administrador. Es una demostración local del frontend: la tabla `Usuarios` todavía no está conectada al inicio de sesión.
+La pantalla de acceso valida el correo, la contraseña y el rol contra la tabla `Usuarios`. En desarrollo muestra las cuentas de demostración; en la compilación de producción no se muestran credenciales. El panel de administración permite crear cuentas, activarlas o desactivarlas, guardar la configuración de la central y consultar la auditoría.
 
-### API de emergencias
+### API
 
-- `GET /api/emergencies` — últimas 100 solicitudes registradas.
-- `POST /api/emergencies` — registra una solicitud. Campos: `emergency_type`, `people`, `priority` (`alta`, `media`, `baja`), `location`, `message`, `reporter_name`, `latitude`, `longitude`.
-- `PATCH /api/emergencies/<id>` — actualiza `status` (`pending`, `in_progress`, `resolved`) o `priority`.
+- `POST /api/auth/login` — inicia sesión. Campos: `identifier` (correo o usuario), `password`, `role` opcional (`operador` o `admin`).
+- `GET /api/auth/me` — devuelve la cuenta autenticada.
+- `POST /api/auth/logout` — registra el cierre de sesión en la auditoría.
+- `GET /api/emergencies` — últimas 100 solicitudes; requiere JWT de operador o administrador.
+- `POST /api/emergencies` — público para el formulario SOS, limitado a 30 solicitudes por minuto. Campos: `emergency_type`, `people`, `priority` (`alta`, `media`, `baja`), `location`, `message`, `reporter_name`, `latitude`, `longitude`.
+- `PATCH /api/emergencies/<id>` — actualiza `status` (`pending`, `in_progress`, `resolved`) o `priority`; requiere JWT y registra el operador.
+- `GET/POST/PATCH /api/users` — administración de cuentas; solo administradores.
+- `GET /api/settings` — configuración de la central; requiere JWT.
+- `PUT /api/settings` — actualiza nombre y ubicación; solo administradores.
+- `GET /api/activity` — últimas 100 entradas de auditoría; solo administradores.
 
-Cada `POST` crea una fila en `SolicitudesSOS` y su registro en `RegistrosComunicacion`; cada cambio de estado genera una fila en `HistorialEstados`. El esquema no tiene columnas de latitud/longitud: si el formulario envía GPS, las coordenadas se agregan como texto dentro de `ubicacion`.
+`POST /api/emergencies` es el único endpoint público de escritura. Cada solicitud crea una fila en `SolicitudesSOS` y su registro en `RegistrosComunicacion`; cada cambio de estado genera una fila en `HistorialEstados` y otra en `Actividad` con el usuario responsable. El esquema no tiene columnas de latitud/longitud: si el formulario envía GPS, las coordenadas se agregan como texto dentro de `ubicacion`.
 
 ## 4. ESP32 y enlace serial
 
@@ -176,8 +201,8 @@ El botón físico sigue disponible como respaldo y se conecta entre GPIO 4 y GND
 
 ```text
 sosnet/
-├── backend/             API, modelos, receptor serial y pruebas
-├── database/            Esquema MySQL y datos iniciales
+├── backend/             API, autenticación JWT, modelos, receptor serial y pruebas
+├── database/            Esquema MySQL, datos iniciales y migraciones
 ├── firmware/
 │   ├── sosnet_node/     ESP32 emisor
 │   └── sosnet_receiver/ ESP32 receptor USB
@@ -195,4 +220,4 @@ El receptor entrega una línea JSON UTF-8 por emergencia:
 {"device_id":"NODE-001","type":"Inundación","message":"El agua sube rápido","reporter_name":"María","location":"Barrio San Francisco","people":5,"priority":"alta","latitude":-25.2867,"longitude":-57.3333}
 ```
 
-No se deben confirmar emergencias únicamente por haber recibido el mensaje: la futura capa de negocio debe registrar estados, operador responsable y trazabilidad.
+No se deben confirmar emergencias únicamente por haber recibido el mensaje: la central registra cada cambio de estado con el operador responsable y conserva la auditoría de accesos y administración. La retención de solicitudes se controla con `purge-old-sos`.

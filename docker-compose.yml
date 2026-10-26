@@ -31,8 +31,12 @@ services:
       FLASK_APP: run.py
       FLASK_DEBUG: ${FLASK_DEBUG:-true}
       SECRET_KEY: ${SECRET_KEY:-dev-only-secret}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-jwt-secret-change-me-1234567890}
+      JWT_ACCESS_TOKEN_HOURS: ${JWT_ACCESS_TOKEN_HOURS:-8}
       DATABASE_URL: mysql+pymysql://${MYSQL_USER:-sosnet}:${MYSQL_PASSWORD:-sosnet_dev}@mysql:3306/${MYSQL_DATABASE:-sosnet}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:1010,http://localhost:5173}
+      RATELIMIT_ENABLED: ${RATELIMIT_ENABLED:-true}
+      SOS_RETENTION_DAYS: ${SOS_RETENTION_DAYS:-90}
       SERIAL_ENABLED: "false"
     ports:
       - "5000:5000"

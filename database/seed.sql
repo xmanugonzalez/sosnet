@@ -1,5 +1,8 @@
 -- Datos iniciales de SOSNET.
--- Usuario de demostración: operador / sosnet123 (cambiar en producción).
+-- Accesos de demostración:
+--   operador@sosnet.local / OperadorDemo123
+--   admin@sosnet.local    / AdminDemo123
+-- Cambiar ambas contraseñas en producción.
 
 USE sosnet;
 
@@ -41,14 +44,24 @@ INSERT INTO Dispositivos (codigo, nombre, tipo, estado, fecha_registro)
 SELECT 'FORMULARIO-SOS', 'Formulario web SOS', 'web', 'activo', NOW() FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM Dispositivos WHERE codigo = 'FORMULARIO-SOS');
 
-INSERT INTO Usuarios (nombre, usuario, contrasena, rol, fecha_registro)
-SELECT 'Operador SOSNET', 'operador',
-       'scrypt:32768:8:1$vshewdkUg0OSCCRm$f3bc84d3ce7bf83127a240154e90b44f27bd6c50ecbef297756242f880428d671b37b832cf8713501e6bf02f66b287841bdabf30d8f9529fa0aaea072ab02a70',
-       'operador', NOW() FROM DUAL
+INSERT INTO Usuarios (nombre, usuario, correo, contrasena, rol, activo, fecha_registro)
+SELECT 'Operador SOSNET', 'operador', 'operador@sosnet.local',
+       'scrypt:32768:8:1$3VXPvpbwneBrVL6S$1ddce3db24eaf66fbd24a130dc1ea9cc3074c821fa76e4a9276c5f215c844b307309d6aae0fc6a85fa8ff4afbc2cf6993e2ebf1dee5c60e8609e7e23e2130583',
+       'operador', 1, NOW() FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM Usuarios WHERE usuario = 'operador');
 
-INSERT INTO Usuarios (nombre, usuario, contrasena, rol, fecha_registro)
-SELECT 'Sistema SOSNET', 'sistema',
-       'scrypt:32768:8:1$sxnnj69oF5KJdJmi$f208225ec347e5fe588d4e38cd093d4bf1ea79338e7bc1f4b0c7cfef3cb9cb2631980bebaec66dd918a39933db3ed117e1547404f6945336e366cd93cc1cc806',
-       'sistema', NOW() FROM DUAL
+INSERT INTO Usuarios (nombre, usuario, correo, contrasena, rol, activo, fecha_registro)
+SELECT 'Administrador SOSNET', 'admin', 'admin@sosnet.local',
+       'scrypt:32768:8:1$gPNoK63RGggCffmo$34431a8a16bb87e5e2373cb8445924a4c86c482ad579dcdda7f53a3e185675eacebfa221761cb5ce6b8fb9e8a7707b89f0e95b298660dba7d03fa32d11146b65',
+       'admin', 1, NOW() FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM Usuarios WHERE usuario = 'admin');
+
+INSERT INTO Usuarios (nombre, usuario, correo, contrasena, rol, activo, fecha_registro)
+SELECT 'Sistema SOSNET', 'sistema', NULL,
+       '!',
+       'sistema', 0, NOW() FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM Usuarios WHERE usuario = 'sistema');
+
+INSERT INTO ConfiguracionCentral (nombre, ubicacion, actualizado_en)
+SELECT 'Central de rescate', 'Asunción, Paraguay', NOW() FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM ConfiguracionCentral);
