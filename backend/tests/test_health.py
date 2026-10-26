@@ -39,6 +39,7 @@ def test_production_blocks_default_or_shared_secrets():
     )
 
     assert default_app.test_client().get("/api/health").status_code == 503
+    assert default_app.test_client().get("/api/health").get_json()["code"] == "insecure_config"
     assert shared_app.test_client().get("/api/health").status_code == 503
 
 

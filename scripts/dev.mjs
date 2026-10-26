@@ -1,10 +1,12 @@
 import { spawn } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync, copyFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { createServer } from 'node:net'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
+import { prepareDevEnv } from './dev-env.mjs'
+import { probeBackend } from './backend-health.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const windows = process.platform === 'win32'
@@ -57,13 +59,6 @@ async function backendContainerRunning() {
 }
 
 async function prepareDependencies(withPython = true) {
-  for (const directory of ['', 'backend', 'frontend']) {
-    const target = resolve(root, directory, '.env')
-    if (!existsSync(target)) {
-      copyFileSync(resolve(root, directory, '.env.example'), target)
-      console.log(`[SOSNET] Creado ${directory ? `${directory}/` : ''}.env desde el ejemplo.`)
-    }
-  }
   if (withPython) {
     if (!existsSync(python)) {
       console.log('[SOSNET] Creando entorno virtual Python…')
@@ -136,10 +131,7 @@ function watch(child, name) {
 
 async function backendAvailable(attempts = 1) {
   for (let attempt = 0; attempt < attempts && !stopping; attempt++) {
-    try {
-      const response = await fetch('http://127.0.0.1:5000/api/health', { signal: AbortSignal.timeout(1000) })
-      if (response.ok) return true
-    } catch { /* El backend todavía está iniciando. */ }
+    if (await probeBackend('http://127.0.0.1:5000/api/health')) return true
     if (attempt < attempts - 1) await delay(1000)
   }
   return false
@@ -160,6 +152,7 @@ function checkPort(port) {
 
 try {
   await checkPort(1010)
+  const repairedEnvFiles = prepareDevEnv(root)
 
   console.log('[SOSNET] Comprobando Docker. Docker Desktop debe estar iniciado.')
   await run('docker', ['info', '--format', '{{.ServerVersion}}'])
@@ -183,6 +176,10 @@ try {
     // Sin reloader: evita duplicar el lector serial y permite detener todo desde esta terminal.
     watch(launch(python, ['-m', 'flask', '--app', 'run.py', 'run', '--debug', '--no-reload', '--host', '127.0.0.1', '--port', '5000'], resolve(root, 'backend')), 'Flask')
   } else if (!stopping) {
+    if (repairedEnvFiles.includes('.env')) {
+      console.log('[SOSNET] Aplicando las claves nuevas al backend Docker…')
+      await run('docker', ['compose', 'up', '-d', '--force-recreate', 'backend'])
+    }
     console.log('[SOSNET] Backend Docker en ejecución; se reutiliza en http://localhost:5000.')
     if (!(await backendAvailable(3))) {
       console.log('[SOSNET] El backend Docker no responde; reiniciándolo…')

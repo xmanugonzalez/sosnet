@@ -91,6 +91,7 @@ def create_app(config_class=Config):
             return (
                 jsonify(
                     {
+                        "code": "insecure_config",
                         "error": (
                             "Configuración insegura: define SECRET_KEY y "
                             "JWT_SECRET_KEY con valores propios y distintos."

@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "dev:setup": "node scripts/dev-env.mjs",
     "dev:frontend": "npm --prefix frontend run dev",
     "db:stop": "docker compose stop mysql",
     "build": "npm --prefix frontend run build",
