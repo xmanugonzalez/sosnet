@@ -121,7 +121,11 @@ def create_app(config_class=Config):
     @click.option("--days", type=int, default=None, help="Días de retención.")
     @click.option("--dry-run", is_flag=True, help="Solo muestra cuántas se borrarían.")
     def purge_old_sos(days, dry_run):
-        retention_days = days or app.config["SOS_RETENTION_DAYS"]
+        retention_days = (
+            days if days is not None else app.config["SOS_RETENTION_DAYS"]
+        )
+        if retention_days < 1:
+            raise click.BadParameter("Los días de retención deben ser mayores que cero.")
         cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
             days=retention_days
         )

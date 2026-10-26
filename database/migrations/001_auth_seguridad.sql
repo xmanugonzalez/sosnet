@@ -1,7 +1,8 @@
 -- Migración 001: autenticación real, configuración persistente y auditoría.
--- Ejecutar una sola vez sobre una base sosnet creada con el esquema anterior.
---   docker compose exec -T mysql mysql --protocol=TCP -h 127.0.0.1 \
---     -usosnet -psosnet_dev sosnet < database/migrations/001_auth_seguridad.sql
+-- Ejecutar una sola vez sobre una base sosnet creada con el esquema anterior:
+--   docker compose exec -T mysql sh -c "mysql -uroot -proot_dev \
+--     --default-character-set=utf8mb4 < \
+--     /docker-entrypoint-initdb.d/migrations/001_auth_seguridad.sql"
 
 USE sosnet;
 

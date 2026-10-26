@@ -68,7 +68,7 @@ En un volumen nuevo, MySQL ejecuta automáticamente `schema.sql` y `seed.sql` po
 Si el volumen ya existía antes de la autenticación real, aplica una sola vez la migración:
 
 ```powershell
-Get-Content -Raw database/migrations/001_auth_seguridad.sql | docker compose exec -T mysql mysql -uroot -proot_dev --default-character-set=utf8mb4
+docker compose exec -T mysql sh -c "mysql -uroot -proot_dev --default-character-set=utf8mb4 < /docker-entrypoint-initdb.d/migrations/001_auth_seguridad.sql"
 ```
 
 La migración agrega `correo`, `activo` y `ultimo_acceso` a `Usuarios`, crea `ConfiguracionCentral` y `Actividad`, y carga las cuentas de demostración. No la vuelvas a ejecutar sobre la misma base.
