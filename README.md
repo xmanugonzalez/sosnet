@@ -32,6 +32,10 @@ npm run dev
 
 El comando crea los `.env` que falten desde sus ejemplos, instala las dependencias del frontend y arranca MySQL. Después inicia Flask y Vite:
 
+Antes de iniciar, genera `SECRET_KEY` y `JWT_SECRET_KEY` aleatorias y distintas en los `.env` locales si faltan, son valores de ejemplo o están repetidas. Conserva las claves válidas y el resto de la configuración; no muestra los secretos ni los versiona. También puedes ejecutar `npm run dev:setup` para preparar solo los `.env`. Si cambian las claves, reinicia Flask; los tokens anteriores dejarán de ser válidos. El arranque recrea el backend Docker activo cuando necesita cargar claves nuevas de `.env`.
+
+Si la API responde `503` por una configuración de seguridad inválida, el arranque informa la causa y termina inmediatamente. No reintenta durante un minuto un error que necesita corregir la configuración.
+
 - Si el contenedor `sosnet-backend` ya está en ejecución, lo reutiliza y no necesita Python.
 - Si no existe, crea `backend/.venv`, instala las dependencias Python e inicia Flask localmente.
 - MySQL aplica `database/schema.sql` y `database/seed.sql` automáticamente cuando el volumen es nuevo. Si el volumen ya existía, aplica una sola vez la migración indicada en la sección de base de datos.
@@ -147,8 +151,10 @@ npm run dev
 
 Abrir `http://localhost:1010`. Vite redirige `/api` al backend durante el desarrollo.
 
-- `http://localhost:1010` — centro de operaciones para el equipo de rescate.
-- `http://localhost:1010/sos` — formulario de solicitud de auxilio para la persona afectada.
+- `http://localhost:1010/` y `http://localhost:1010/sos` — formulario SOS, siempre disponible sin iniciar sesión, incluso si ya existe una sesión del equipo.
+- `http://localhost:1010/admin` y `/admin/*` — acceso del equipo y dashboard de la central después del login.
+
+Las rutas desconocidas muestran “Página no encontrada” con un enlace al formulario. Para acceder al centro de operaciones, abrí `/admin` directamente.
 
 La pantalla de acceso valida el correo, la contraseña y el rol contra la tabla `Usuarios`. En desarrollo muestra las cuentas de demostración; en la compilación de producción no se muestran credenciales. El panel de administración permite crear cuentas, activarlas o desactivarlas, guardar la configuración de la central y consultar la auditoría.
 
