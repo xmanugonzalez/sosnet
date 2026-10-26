@@ -1,4 +1,5 @@
 import { createElement, useState } from 'react'
+import logo from './assets/logo.png'
 import { Activity, ArrowDownLeft, ArrowRight, Bell, Check, CheckCircle2, ChevronRight, Clock3, Filter, HeartPulse, LayoutDashboard, LifeBuoy, List, MapPin, Menu, Radio, Search, ShieldCheck, Users, Waves, X } from 'lucide-react'
 
 const initialReports = [
@@ -34,14 +35,14 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className={`sidebar ${menu ? 'open' : ''}`}>
-        <a className="brand" href="#" onClick={() => navigate('Resumen')} aria-label="SOSNET, inicio"><span className="brand-icon"><Activity size={24} /></span><span>SOSNET<span className="brand-sub">RED DE EMERGENCIAS</span></span></a>
+        <a className="brand" href="#" onClick={() => navigate('Resumen')} aria-label="SOSNET, inicio"><img className="brand-logo" src={logo} alt="SOSNET" width="2172" height="724" /></a>
         <div className="workspace"><span className="workspace-icon"><ShieldCheck size={20} /></span><div>Central de rescate<small>Asunción, Paraguay</small></div><span className="live-dot" /></div>
         <p className="nav-label">CENTRO DE OPERACIONES</p>
         <nav aria-label="Navegación principal">{[{ name: 'Resumen', icon: LayoutDashboard }, { name: 'Solicitudes', icon: List }, { name: 'Red de dispositivos', icon: Radio }].map(({name, icon: Icon}) => <button key={name} className={`nav-item ${tab === name ? 'selected' : ''}`} onClick={() => navigate(name)}>{createElement(Icon, { size: 19, 'aria-hidden': true })}{name}{name === 'Solicitudes' && <span className="nav-count">{reports.filter(r => r.status === 'Pendiente').length}</span>}</button>)}</nav>
         <div className="sidebar-bottom"><div className="offline-card"><Radio size={20}/><strong>La ayuda sigue conectada.</strong><p>Una red local para estar cerca, incluso sin internet.</p><span>PROTOTIPO · ESP-NOW</span></div><div className="operator"><span className="avatar">OP</span><div>Operador de central<small>Sesión de demostración</small></div></div></div>
       </aside>
       <div className="main-shell">
-        <header className="topbar"><div className="breadcrumb"><button className="mobile-menu icon-button" aria-label="Abrir menú" onClick={() => setMenu(!menu)}><Menu size={21}/></button><span>Centro de operaciones</span><ChevronRight size={14}/><strong>{tab}</strong></div><div className="topbar-right"><span className="demo-label"><i/>Modo demostración</span><span className="top-divider"/><span className="top-avatar">OP</span></div></header>
+        <header className="topbar"><div className="breadcrumb"><button className="mobile-menu icon-button" aria-label="Abrir menú" onClick={() => setMenu(!menu)}><Menu size={21}/></button><a className="mobile-brand" href="#" onClick={() => navigate('Resumen')} aria-label="SOSNET, inicio"><img src={logo} alt="SOSNET" width="2172" height="724" /></a><span>Centro de operaciones</span><ChevronRight size={14}/><strong>{tab}</strong></div><div className="topbar-right"><span className="demo-label"><i/>Modo demostración</span><span className="top-divider"/><span className="top-avatar">OP</span></div></header>
         <main>
           <div className="page-heading"><div><div className="eyebrow">CADA SOLICITUD CUENTA</div><h1>{tab === 'Resumen' ? 'Panorama de emergencias' : tab === 'Solicitudes' ? 'Solicitudes de emergencia' : 'Red de dispositivos'}</h1><p>{tab === 'Red de dispositivos' ? 'Conoce el recorrido de las solicitudes hasta tu central.' : 'Toda la información que necesitas para coordinar la ayuda.'}</p></div><span className="local-label"><Radio size={16}/> Operación en red local</span></div>
           <div className="demo-banner"><LifeBuoy size={18}/><span><strong>Estás explorando el prototipo.</strong> Las solicitudes y los dispositivos son ejemplos; no representan emergencias reales.</span></div>
