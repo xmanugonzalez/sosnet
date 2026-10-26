@@ -15,10 +15,37 @@ React + Vite <- HTTP / JSON <- Flask + PySerial -> MySQL
 ## Requisitos
 
 - Node.js 20 o superior y npm.
-- Python 3.11 o superior.
-- Docker Desktop (recomendado para MySQL) o MySQL 8 instalado localmente.
-- Arduino IDE 2.x con el paquete de placas ESP32 de Espressif.
-- Dos ESP32 para probar el enlace completo.
+- Python 3.11 o superior con pip y venv, disponible en el PATH (`py` o `python` en Windows; `python3` en Linux/macOS).
+- Docker Desktop iniciado con contenedores Linux, o Docker Engine con Docker Compose v2 en Linux.
+- Internet para descargar las dependencias y la imagen MySQL en el primer arranque.
+- Arduino IDE 2.x con el paquete de placas ESP32 de Espressif y dos ESP32 para probar el enlace de hardware. No son necesarios para abrir la plataforma.
+
+## Inicio con un solo comando
+
+En una notebook nueva, instala los requisitos anteriores, abre Docker Desktop y ejecuta:
+
+```powershell
+git clone https://github.com/xmanugonzalez/sosnet.git
+cd sosnet
+npm run dev
+```
+
+El comando crea los `.env` que falten desde sus ejemplos, crea `backend/.venv`, instala las dependencias Python y React y después inicia MySQL, Flask y Vite. No necesitas copiar archivos, ejecutar `npm install` por separado ni activar el entorno virtual. Conserva los `.env` existentes. En arranques posteriores solo reinstala dependencias cuando cambian sus manifiestos.
+
+La primera ejecución puede tardar varios minutos descargando MySQL y las dependencias. MySQL dispone de hasta 10 minutos para terminar la inicialización, y su healthcheck consulta la base con el usuario de la aplicación antes de arrancar Flask.
+
+- Frontend: `http://localhost:5173`.
+- API: `http://localhost:5000/api/health`.
+- `Ctrl+C` detiene Flask y Vite. MySQL permanece activo con sus datos; para detenerlo, ejecuta `npm run db:stop`.
+- Para trabajar únicamente en la interfaz: `npm run dev:frontend`.
+
+El lector serial arranca con Flask si `SERIAL_ENABLED=true` y el ESP32 está conectado al puerto configurado. El hardware se programa por separado con Arduino IDE. Flask se ejecuta sin recarga automática para evitar duplicar el lector serial; después de editar Python, reinicia `npm run dev`. Vite mantiene la recarga automática de React.
+
+Si falta Python o Docker está cerrado, el comando muestra el problema y termina. Los puertos 3306, 5000 y 5173 deben estar libres. Si personalizas `.env`, ajusta también `DATABASE_URL` en `backend/.env` para que coincidan puerto, usuario, contraseña y base de datos. En Linux puede ser necesario instalar el paquete de venv de tu distribución y habilitar el acceso de tu usuario a Docker.
+
+Si MySQL aparece como `unhealthy`, el comando muestra sus últimos logs. Puedes consultarlos con `docker compose logs --tail 60 mysql`. Las credenciales de inicialización solo se aplican al crear el volumen por primera vez: cambiarlas en `.env` no modifica las de una base existente. No borres el volumen para resolver un fallo si contiene datos que quieras conservar.
+
+Las secciones siguientes describen el arranque manual alternativo; no hace falta seguirlas para usar `npm run dev`.
 
 ## 1. Base de datos
 
