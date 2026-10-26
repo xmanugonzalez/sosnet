@@ -38,7 +38,25 @@ async function findPython() {
   throw new Error('Instala Python 3.11 o superior (con venv y pip) y agrégalo al PATH.')
 }
 
-async function prepareDependencies() {
+async function backendContainerRunning() {
+  try {
+    const output = await new Promise((resolveOutput, reject) => {
+      const child = spawn('docker', ['compose', 'ps', '--status', 'running', '--services'], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+        windowsHide: true,
+      })
+      let text = ''
+      child.stdout.on('data', chunk => { text += chunk })
+      child.once('error', reject)
+      child.once('close', code => resolveOutput(code === 0 ? text : ''))
+    })
+    return output.split(/\r?\n/).map(name => name.trim()).includes('backend')
+  } catch {
+    return false
+  }
+}
+
+async function prepareDependencies(withPython = true) {
   for (const directory of ['', 'backend', 'frontend']) {
     const target = resolve(root, directory, '.env')
     if (!existsSync(target)) {
@@ -46,22 +64,24 @@ async function prepareDependencies() {
       console.log(`[SOSNET] Creado ${directory ? `${directory}/` : ''}.env desde el ejemplo.`)
     }
   }
-  if (!existsSync(python)) {
-    console.log('[SOSNET] Creando entorno virtual Python…')
-    const [command, args] = await findPython()
-    await run(command, [...args, '-m', 'venv', resolve(root, 'backend/.venv')])
-  }
-  if (stopping) return
-  const requirements = resolve(root, 'backend/requirements-dev.txt')
-  const pythonStamp = resolve(root, 'backend/.venv/.sosnet-dependencies')
-  const pythonHash = createHash('sha256')
-    .update(readFileSync(requirements))
-    .update(readFileSync(resolve(root, 'backend/requirements.txt'))).digest('hex')
-  if (!existsSync(pythonStamp) || readFileSync(pythonStamp, 'utf8') !== pythonHash) {
-    console.log('[SOSNET] Instalando dependencias Python…')
-    await run(python, ['-m', 'pip', 'install', '-r', requirements])
+  if (withPython) {
+    if (!existsSync(python)) {
+      console.log('[SOSNET] Creando entorno virtual Python…')
+      const [command, args] = await findPython()
+      await run(command, [...args, '-m', 'venv', resolve(root, 'backend/.venv')])
+    }
     if (stopping) return
-    writeFileSync(pythonStamp, pythonHash)
+    const requirements = resolve(root, 'backend/requirements-dev.txt')
+    const pythonStamp = resolve(root, 'backend/.venv/.sosnet-dependencies')
+    const pythonHash = createHash('sha256')
+      .update(readFileSync(requirements))
+      .update(readFileSync(resolve(root, 'backend/requirements.txt'))).digest('hex')
+    if (!existsSync(pythonStamp) || readFileSync(pythonStamp, 'utf8') !== pythonHash) {
+      console.log('[SOSNET] Instalando dependencias Python…')
+      await run(python, ['-m', 'pip', 'install', '-r', requirements])
+      if (stopping) return
+      writeFileSync(pythonStamp, pythonHash)
+    }
   }
   const frontendStamp = resolve(root, 'frontend/node_modules/.sosnet-dependencies')
   const frontendHash = createHash('sha256')
@@ -114,15 +134,20 @@ function watch(child, name) {
   })
 }
 
-async function waitForBackend() {
-  for (let attempt = 0; attempt < 60 && !stopping; attempt++) {
+async function backendAvailable(attempts = 1) {
+  for (let attempt = 0; attempt < attempts && !stopping; attempt++) {
     try {
       const response = await fetch('http://127.0.0.1:5000/api/health', { signal: AbortSignal.timeout(1000) })
-      if (response.ok) return
-    } catch { /* Flask todavía está iniciando. */ }
-    await delay(1000)
+      if (response.ok) return true
+    } catch { /* El backend todavía está iniciando. */ }
+    if (attempt < attempts - 1) await delay(1000)
   }
-  if (!stopping) throw new Error('Flask no respondió en http://localhost:5000/api/health dentro del tiempo esperado.')
+  return false
+}
+
+async function waitForBackend() {
+  if (await backendAvailable(60)) return
+  if (!stopping) throw new Error('El backend no respondió en http://localhost:5000/api/health dentro del tiempo esperado.')
 }
 
 function checkPort(port) {
@@ -134,12 +159,10 @@ function checkPort(port) {
 }
 
 try {
-  await checkPort(5000)
-  await checkPort(5173)
+  await checkPort(1010)
 
   console.log('[SOSNET] Comprobando Docker. Docker Desktop debe estar iniciado.')
   await run('docker', ['info', '--format', '{{.ServerVersion}}'])
-  if (!stopping) await prepareDependencies()
   if (!stopping) {
     console.log('[SOSNET] Iniciando MySQL y esperando su healthcheck…')
     try {
@@ -152,16 +175,25 @@ try {
       throw error
     }
   }
-  if (!stopping) {
-    console.log('[SOSNET] Iniciando Flask…')
+  const dockerBackend = await backendContainerRunning()
+  if (!stopping) await prepareDependencies(!dockerBackend)
+  if (!stopping && !dockerBackend) {
+    await checkPort(5000)
+    console.log('[SOSNET] Iniciando Flask local…')
     // Sin reloader: evita duplicar el lector serial y permite detener todo desde esta terminal.
     watch(launch(python, ['-m', 'flask', '--app', 'run.py', 'run', '--debug', '--no-reload', '--host', '127.0.0.1', '--port', '5000'], resolve(root, 'backend')), 'Flask')
-    await waitForBackend()
+  } else if (!stopping) {
+    console.log('[SOSNET] Backend Docker en ejecución; se reutiliza en http://localhost:5000.')
+    if (!(await backendAvailable(3))) {
+      console.log('[SOSNET] El backend Docker no responde; reiniciándolo…')
+      await run('docker', ['compose', 'restart', 'backend'])
+    }
   }
+  if (!stopping) await waitForBackend()
   if (!stopping) {
     console.log('[SOSNET] API lista: http://localhost:5000/api/health')
-    console.log('[SOSNET] Frontend: http://localhost:5173 · Ctrl+C para detener los servidores.')
-    watch(launch(process.execPath, [resolve(root, 'frontend/node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', '5173', '--strictPort'], resolve(root, 'frontend')), 'Vite')
+    console.log('[SOSNET] Frontend: http://localhost:1010 · Ctrl+C para detener los servidores.')
+    watch(launch(process.execPath, [resolve(root, 'frontend/node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', '1010', '--strictPort'], resolve(root, 'frontend')), 'Vite')
   }
 } catch (error) {
   if (!stopping) {

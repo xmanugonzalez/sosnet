@@ -12,6 +12,7 @@ services:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./database:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql --protocol=TCP -h 127.0.0.1 -u\"$$MYSQL_USER\" \"$$MYSQL_DATABASE\" -e 'SELECT 1' >/dev/null 2>&1"]
       start_period: 180s
@@ -19,6 +20,24 @@ services:
       timeout: 5s
       retries: 60
 
+  backend:
+    build: ./backend
+    container_name: sosnet-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      FLASK_APP: run.py
+      FLASK_DEBUG: ${FLASK_DEBUG:-true}
+      SECRET_KEY: ${SECRET_KEY:-dev-only-secret}
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-sosnet}:${MYSQL_PASSWORD:-sosnet_dev}@mysql:3306/${MYSQL_DATABASE:-sosnet}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:1010,http://localhost:5173}
+      SERIAL_ENABLED: "false"
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+
 volumes:
   mysql_data:
-

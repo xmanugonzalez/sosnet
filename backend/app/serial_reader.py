@@ -6,23 +6,29 @@ import time
 import serial
 
 from .extensions import db
-from .models import Emergency
+from .services import registrar_solicitud
 
 logger = logging.getLogger(__name__)
 
 
 def _save_message(app, payload):
+    if not isinstance(payload, dict):
+        logger.warning("Mensaje serial ignorado: se esperaba un objeto JSON")
+        return
+
     with app.app_context():
-        emergency = Emergency(
-            device_id=str(payload.get("device_id", "unknown"))[:64],
-            emergency_type=str(payload.get("type", "general"))[:50],
-            message=str(payload.get("message", "Solicitud de emergencia"))[:500],
-            latitude=payload.get("latitude"),
-            longitude=payload.get("longitude"),
+        try:
+            solicitud = registrar_solicitud(payload)
+        except Exception:
+            db.session.rollback()
+            logger.exception("No se pudo almacenar la solicitud recibida por serial")
+            return
+
+        logger.info(
+            "Solicitud %s almacenada desde %s",
+            solicitud.codigo_mensaje,
+            solicitud.dispositivo.codigo,
         )
-        db.session.add(emergency)
-        db.session.commit()
-        logger.info("Emergencia %s almacenada desde %s", emergency.id, emergency.device_id)
 
 
 def _read_loop(app):
@@ -47,4 +53,3 @@ def start_serial_reader(app):
     thread = threading.Thread(target=_read_loop, args=(app,), name="serial-reader", daemon=True)
     thread.start()
     return thread
-
