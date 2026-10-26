@@ -1,23 +1,14 @@
-import { createElement, useState } from 'react'
+import { createElement, useEffect, useRef, useState } from 'react'
 import {
-  Activity,
-  AlertTriangle,
-  ArrowLeft,
-  CheckCircle2,
-  HeartPulse,
-  LifeBuoy,
-  MapPin,
-  Minus,
-  Package,
-  Plus,
-  Radio,
-  Send,
-  Users,
-  Waves,
+  AlertTriangle, Check, CheckCircle2, ChevronDown, Clock3,
+  FileText, HeartPulse, House, Info, LifeBuoy, LoaderCircle, MapPin,
+  MessageSquareText, Minus, Navigation, Package, Plus, Radio, RadioTower,
+  Send, ShieldCheck, TreePine, Users, Waves,
 } from 'lucide-react'
+import emblem from './assets/favicon.png'
+import './sos-form.css'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api'
-
 const TYPES = [
   { value: 'Inundación', icon: Waves },
   { value: 'Asistencia médica', icon: HeartPulse },
@@ -25,12 +16,41 @@ const TYPES = [
   { value: 'Suministros', icon: Package },
   { value: 'Otra', icon: AlertTriangle },
 ]
-
 const PRIORITIES = [
   { value: 'baja', label: 'Baja', hint: 'Podemos esperar' },
   { value: 'media', label: 'Media', hint: 'Necesitamos ayuda pronto' },
   { value: 'alta', label: 'Alta', hint: 'Estamos en peligro' },
 ]
+
+function BrandHeader() {
+  return (
+    <header className="sos-brand-header">
+      <a className="sos-brand-lockup" href="/" aria-label="SOSNET, formulario de auxilio">
+        <img src={emblem} alt="" width="76" height="76" />
+        <span>
+          <strong>SOS<span>NET</span></strong>
+          <span className="sos-brand-caption">Comunicación de emergencias<br /><b>Red local, sin depender de internet</b></span>
+        </span>
+      </a>
+    </header>
+  )
+}
+
+function LandscapeFooter({ success }) {
+  return (
+    <footer className="sos-landscape-footer">
+      <div className="sos-landscape" aria-hidden="true">
+        <TreePine className="land-tree land-tree-one" />
+        <House className="land-house land-house-one" />
+        <TreePine className="land-tree land-tree-two" />
+        <House className="land-house land-house-two" />
+        <RadioTower className="land-tower" />
+        <TreePine className="land-tree land-tree-three" />
+      </div>
+      {success && <p>Tu seguridad es nuestra prioridad</p>}
+    </footer>
+  )
+}
 
 export default function SosForm() {
   const [type, setType] = useState('Inundación')
@@ -43,21 +63,33 @@ export default function SosForm() {
   const [locationState, setLocationState] = useState('idle')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
-  const [folio, setFolio] = useState(null)
+  const [locationError, setLocationError] = useState('')
+  const [receipt, setReceipt] = useState(null)
+  const locationRef = useRef(null)
+  const errorRef = useRef(null)
+  const successRef = useRef(null)
+  const formTitleRef = useRef(null)
+  const hadReceipt = useRef(false)
+  const inFlight = useRef(false)
+  const selectedIcon = TYPES.find(option => option.value === type)?.icon || LifeBuoy
 
-  function changePeople(delta) {
-    setPeople((current) => Math.min(1000, Math.max(1, current + delta)))
-  }
+  useEffect(() => {
+    if (receipt) {
+      successRef.current?.focus()
+      hadReceipt.current = true
+    }
+    else if (error) errorRef.current?.focus()
+    else if (hadReceipt.current) {
+      formTitleRef.current?.focus()
+      hadReceipt.current = false
+    }
+  }, [receipt, error])
 
   function requestLocation() {
-    if (!navigator.geolocation) {
-      setLocationState('error')
-      return
-    }
-
+    if (!navigator.geolocation) { setLocationState('error'); return }
     setLocationState('loading')
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      position => {
         setCoords({
           latitude: Number(position.coords.latitude.toFixed(7)),
           longitude: Number(position.coords.longitude.toFixed(7)),
@@ -71,330 +103,162 @@ export default function SosForm() {
 
   async function handleSubmit(event) {
     event.preventDefault()
+    if (inFlight.current) return
     setError('')
-
     if (!location.trim()) {
-      setError('Indica una ubicación o un punto de referencia para que puedan encontrarte.')
+      setLocationError('Escribí una ubicación o un punto de referencia para que puedan encontrarte.')
+      locationRef.current?.focus()
       return
     }
-
+    setLocationError('')
+    inFlight.current = true
     setSending(true)
+    const payload = {
+      emergency_type: type,
+      message: message.trim() || 'Solicitud de emergencia',
+      reporter_name: name.trim() || null,
+      location: location.trim(),
+      people,
+      priority,
+      latitude: coords?.latitude ?? null,
+      longitude: coords?.longitude ?? null,
+      device_id: 'FORMULARIO-SOS',
+    }
     try {
       const response = await fetch(`${API_URL}/emergencies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          emergency_type: type,
-          message: message.trim() || 'Solicitud de emergencia',
-          reporter_name: name.trim() || null,
-          location: location.trim(),
-          people,
-          priority,
-          latitude: coords?.latitude ?? null,
-          longitude: coords?.longitude ?? null,
-          device_id: 'FORMULARIO-SOS',
-        }),
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(20000),
       })
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || 'La central no pudo registrar la solicitud.')
+      const data = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(data?.error || 'La central no pudo registrar la solicitud. Conservamos tus datos para que puedas volver a intentarlo.')
+      if (data?.id === undefined || data.id === null || data.id === '') {
+        throw new Error('La central no devolvió un número de solicitud. Verificá la recepción con la central antes de volver a enviar.')
       }
-
-      const data = await response.json()
-      setFolio(data.id)
+      setReceipt({
+        id: data.id,
+        receivedAt: data.received_at || null,
+        type: data.emergency_type || payload.emergency_type,
+        location: data.location || payload.location,
+        people: data.people ?? payload.people,
+        priority: data.priority || payload.priority,
+      })
+      window.scrollTo({ top: 0, behavior: 'instant' })
     } catch (submitError) {
       setError(
-        submitError.message ||
-          'No se pudo enviar la solicitud. Verifica que estés conectado a la red SOSNET.',
+        submitError.name === 'TimeoutError'
+          ? 'No recibimos confirmación de la central a tiempo. Tus datos siguen aquí; verificá la recepción antes de volver a enviar.'
+          : submitError instanceof TypeError
+            ? 'No se pudo conectar con la central. Comprobá la conexión a la red local y volvé a intentarlo. Tus datos siguen aquí.'
+            : submitError.message,
       )
     } finally {
+      inFlight.current = false
       setSending(false)
     }
   }
 
   function resetForm() {
-    setFolio(null)
-    setType('Inundación')
-    setPeople(1)
-    setName('')
-    setLocation('')
-    setMessage('')
-    setPriority('media')
-    setCoords(null)
-    setLocationState('idle')
-    setError('')
+    setReceipt(null); setType('Inundación'); setPeople(1); setName('')
+    setLocation(''); setMessage(''); setPriority('media'); setCoords(null)
+    setLocationState('idle'); setError(''); setLocationError('')
+    window.scrollTo({ top: 0, behavior: 'instant' })
   }
 
-  if (folio !== null) {
-    return (
-      <main className="min-h-screen bg-slate-950 px-5 py-10 text-slate-100">
-        <div className="mx-auto max-w-lg">
-          <div className="mb-8 flex items-center gap-3">
-            <div className="grid size-11 place-items-center rounded-xl bg-red-500 font-black text-white">
-              S
-            </div>
-            <div>
-              <p className="text-xl font-bold tracking-tight">SOSNET</p>
-              <p className="text-sm text-slate-400">Red local de emergencias</p>
-            </div>
-          </div>
-
-          <section className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-8 text-center">
-            <span className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-500/20 text-emerald-300">
-              <CheckCircle2 size={36} />
-            </span>
-            <h1 className="mt-6 text-2xl font-bold">Solicitud registrada</h1>
-            <p className="mt-3 text-sm leading-6 text-emerald-100/80">
-              Tu pedido de ayuda llegó a la central. Un equipo podrá verlo y coordinar la
-              asistencia.
-            </p>
-            <div className="mt-6 rounded-2xl border border-emerald-500/30 bg-slate-950/40 px-5 py-4">
-              <p className="text-xs uppercase tracking-widest text-emerald-300/80">Folio</p>
-              <p className="mt-1 text-3xl font-black tracking-tight">
-                SOS-{String(folio).padStart(3, '0')}
-              </p>
-            </div>
-
-            <p className="mt-6 text-xs leading-5 text-slate-400">
-              Recibir la solicitud no significa que la ayuda ya esté en camino. Si tu vida corre
-              peligro inmediato, busca un lugar seguro y avisa a las personas cercanas.
-            </p>
-
-            <button
-              type="button"
-              onClick={resetForm}
-              className="mt-6 w-full rounded-xl bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/20"
-            >
-              Enviar otra solicitud
-            </button>
-          </section>
-
-          <a
-            href="/"
-            className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-500 transition hover:text-slate-300"
-          >
-            <ArrowLeft size={14} /> Volver al centro de operaciones
-          </a>
-        </div>
-      </main>
-    )
-  }
+  const receivedDate = receipt?.receivedAt ? new Date(receipt.receivedAt) : null
+  const receivedLabel = receivedDate && !Number.isNaN(receivedDate.getTime())
+    ? new Intl.DateTimeFormat('es-PY', { dateStyle: 'medium', timeStyle: 'short' }).format(receivedDate)
+    : 'No informada por la central'
 
   return (
-    <main className="min-h-screen bg-slate-950 px-5 py-8 text-slate-100">
-      <div className="mx-auto max-w-lg">
-        <header className="mb-6 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="grid size-11 place-items-center rounded-xl bg-red-500 font-black text-white">
-              S
+    <main className="sos-page">
+      <div className="sos-app">
+        <BrandHeader />
+        <section className={`sos-sheet ${receipt ? 'sos-sheet-success' : ''}`} aria-labelledby={receipt ? 'sos-success-title' : 'sos-title'}>
+          {receipt ? (
+            <div className="sos-confirmation">
+              <div className="sos-success-heading">
+                <span className="sos-success-symbol"><Check size={48} strokeWidth={3.5} aria-hidden="true" /></span>
+                <h1 id="sos-success-title" ref={successRef} tabIndex={-1}>¡Solicitud registrada!</h1>
+                <p>Tu mensaje de auxilio llegó a la central SOSNET y quedó registrado.</p>
+                <span className="sos-folio">Solicitud SOS-{String(receipt.id).padStart(3, '0')}</span>
+              </div>
+              <dl className="sos-receipt">
+                <div><dt><Clock3 size={20} aria-hidden="true" />Fecha y hora</dt><dd>{receivedLabel}</dd></div>
+                <div><dt><Radio size={20} aria-hidden="true" />Estado</dt><dd><span className="sos-received-badge"><CheckCircle2 size={14} aria-hidden="true" />Registrada</span></dd></div>
+                <div><dt><FileText size={20} aria-hidden="true" />Emergencia</dt><dd>{receipt.type}</dd></div>
+                <div className="sos-receipt-location"><dt><MapPin size={20} aria-hidden="true" />Ubicación</dt><dd>{receipt.location}</dd></div>
+                <div><dt><Users size={20} aria-hidden="true" />Personas afectadas</dt><dd>{receipt.people}</dd></div>
+                <div><dt><AlertTriangle size={20} aria-hidden="true" />Prioridad</dt><dd>{PRIORITIES.find(option => option.value === receipt.priority)?.label || 'Media'}</dd></div>
+              </dl>
+              <aside className="sos-safety-note"><Info size={24} aria-hidden="true" /><div><strong>Mantenete en un lugar seguro.</strong><p>La central podrá coordinar la asistencia. El registro no confirma que un equipo ya esté en camino.</p></div></aside>
+              <button className="sos-another" type="button" onClick={resetForm}>Enviar otra solicitud<Plus size={18} aria-hidden="true" /></button>
             </div>
-            <div>
-              <p className="text-xl font-bold tracking-tight">SOSNET</p>
-              <p className="text-xs text-slate-400">Solicitud de auxilio</p>
-            </div>
-          </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-3 py-1.5 text-[11px] font-medium text-emerald-300">
-            <Radio size={13} /> Red local
-          </span>
-        </header>
-
-        <section className="mb-5 rounded-2xl border border-red-500/30 bg-gradient-to-br from-red-500/15 to-slate-900 p-5">
-          <div className="flex items-start gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-red-500 text-white">
-              <LifeBuoy size={22} />
-            </span>
-            <div>
-              <h1 className="text-xl font-bold">Necesito ayuda</h1>
-              <p className="mt-1 text-sm leading-6 text-slate-300">
-                Completa los datos. La solicitud se envía a la central de rescate por la red
-                local, sin depender de internet.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <fieldset>
-            <legend className="mb-2 text-sm font-semibold text-slate-200">
-              ¿Qué está ocurriendo?
-            </legend>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {TYPES.map(({ value, icon: Icon }) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setType(value)}
-                  aria-pressed={type === value}
-                  className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-left text-xs font-semibold transition ${
-                    type === value
-                      ? 'border-red-400 bg-red-500/20 text-white'
-                      : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700'
-                  }`}
-                >
-                  {createElement(Icon, { size: 18 })}
-                  {value}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          <div>
-            <label htmlFor="sos-location" className="mb-2 block text-sm font-semibold text-slate-200">
-              ¿Dónde están? <span className="text-red-400">*</span>
-            </label>
-            <div className="relative">
-              <MapPin
-                size={18}
-                className="pointer-events-none absolute left-3 top-3.5 text-slate-500"
-              />
-              <input
-                id="sos-location"
-                value={location}
-                onChange={(event) => setLocation(event.target.value)}
-                required
-                maxLength={200}
-                placeholder="Barrio, calle, casa de referencia…"
-                className="w-full rounded-xl border border-slate-800 bg-slate-900 py-3 pl-10 pr-4 text-sm text-white placeholder:text-slate-600 focus:border-red-400 focus:outline-none"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={requestLocation}
-              disabled={locationState === 'loading'}
-              className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-sky-300 transition hover:text-sky-200 disabled:opacity-60"
-            >
-              <MapPin size={13} />
-              {locationState === 'loading'
-                ? 'Obteniendo ubicación…'
-                : locationState === 'ok'
-                  ? 'Ubicación GPS agregada'
-                  : 'Agregar mi ubicación GPS (opcional)'}
-            </button>
-            {locationState === 'error' && (
-              <p className="mt-1 text-xs text-amber-300">
-                No se pudo obtener el GPS. Describe la ubicación manualmente.
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-200">
-              ¿Cuántas personas necesitan ayuda?
-            </label>
-            <div className="flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-900 px-4 py-2.5">
-              <Users size={18} className="text-slate-500" />
-              <button
-                type="button"
-                onClick={() => changePeople(-1)}
-                aria-label="Quitar una persona"
-                className="grid size-9 place-items-center rounded-lg bg-slate-800 text-white transition hover:bg-slate-700"
-              >
-                <Minus size={16} />
-              </button>
-              <span className="min-w-8 text-center text-2xl font-bold tabular-nums">{people}</span>
-              <button
-                type="button"
-                onClick={() => changePeople(1)}
-                aria-label="Agregar una persona"
-                className="grid size-9 place-items-center rounded-lg bg-slate-800 text-white transition hover:bg-slate-700"
-              >
-                <Plus size={16} />
-              </button>
-              <span className="ml-auto text-xs text-slate-500">
-                {people === 1 ? 'persona' : 'personas'}
-              </span>
-            </div>
-          </div>
-
-          <fieldset>
-            <legend className="mb-2 text-sm font-semibold text-slate-200">Prioridad</legend>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {PRIORITIES.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setPriority(option.value)}
-                  aria-pressed={priority === option.value}
-                  className={`rounded-xl border px-3 py-3 text-left transition ${
-                    priority === option.value
-                      ? option.value === 'alta'
-                        ? 'border-red-400 bg-red-500/20'
-                        : option.value === 'media'
-                          ? 'border-amber-400 bg-amber-500/15'
-                          : 'border-emerald-400 bg-emerald-500/10'
-                      : 'border-slate-800 bg-slate-900 hover:border-slate-700'
-                  }`}
-                >
-                  <span className="block text-sm font-bold text-white">{option.label}</span>
-                  <span className="mt-0.5 block text-[11px] text-slate-400">{option.hint}</span>
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          <div>
-            <label htmlFor="sos-name" className="mb-2 block text-sm font-semibold text-slate-200">
-              Tu nombre <span className="text-slate-500">(opcional)</span>
-            </label>
-            <input
-              id="sos-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              maxLength={120}
-              placeholder="Nombre de la persona de contacto"
-              className="w-full rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-white placeholder:text-slate-600 focus:border-red-400 focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="sos-message" className="mb-2 block text-sm font-semibold text-slate-200">
-              Detalles <span className="text-slate-500">(opcional)</span>
-            </label>
-            <textarea
-              id="sos-message"
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              maxLength={500}
-              rows={3}
-              placeholder="Ej.: hay niños y una persona mayor, el agua sube rápido."
-              className="w-full resize-none rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-white placeholder:text-slate-600 focus:border-red-400 focus:outline-none"
-            />
-            <p className="mt-1 text-right text-[11px] text-slate-600">{message.length}/500</p>
-          </div>
-
-          {error && (
-            <div
-              role="alert"
-              className="flex items-start gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200"
-            >
-              <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-              {error}
-            </div>
+          ) : (
+            <>
+              <div className="sos-form-heading">
+                <h1 id="sos-title" ref={formTitleRef} tabIndex={-1}>Solicitar auxilio</h1>
+                <p>Completá el formulario para enviar una solicitud de emergencia a la central.</p>
+              </div>
+              <form className="sos-request-form" onSubmit={handleSubmit} aria-busy={sending}>
+                <fieldset className="sos-fields" disabled={sending}>
+                  <legend className="sr-only">Datos de la solicitud de auxilio</legend>
+                  <div className="sos-field">
+                    <label htmlFor="sos-type">Tipo de emergencia</label>
+                    <div className="sos-input-wrap sos-type-control">
+                      {createElement(selectedIcon, { size: 22, 'aria-hidden': true })}
+                      <select id="sos-type" value={type} onChange={event => setType(event.target.value)}>
+                        {TYPES.map(option => <option key={option.value} value={option.value}>{option.value}</option>)}
+                      </select>
+                      <ChevronDown className="sos-select-chevron" size={19} aria-hidden="true" />
+                    </div>
+                  </div>
+                  <div className="sos-field">
+                    <label htmlFor="sos-location">Ubicación <span className="sos-required" aria-hidden="true">*</span></label>
+                    <div className="sos-input-wrap">
+                      <MapPin size={21} aria-hidden="true" />
+                      <input id="sos-location" ref={locationRef} value={location} onChange={event => { setLocation(event.target.value); if (locationError) setLocationError('') }} onBlur={() => { if (location && !location.trim()) setLocationError('Escribí una ubicación válida.') }} required maxLength={200} autoComplete="street-address" placeholder="Barrio, calle o punto de referencia" aria-invalid={Boolean(locationError)} aria-describedby={locationError ? 'sos-location-error' : 'sos-location-hint'} />
+                    </div>
+                    {locationError ? <p id="sos-location-error" className="sos-field-error" role="alert">{locationError}</p> : <p className="sos-field-hint" id="sos-location-hint">Indicá una referencia para que puedan encontrarte.</p>}
+                    <button className="sos-gps-button" type="button" onClick={requestLocation} disabled={locationState === 'loading'}>
+                      {locationState === 'ok' ? <CheckCircle2 size={16} aria-hidden="true" /> : <Navigation size={16} aria-hidden="true" />}
+                      {locationState === 'loading' ? 'Obteniendo ubicación…' : locationState === 'ok' ? 'Ubicación GPS agregada' : 'Agregar ubicación GPS (opcional)'}
+                    </button>
+                    <p className="sos-location-status" role="status">{locationState === 'error' ? 'No se pudo obtener el GPS. Podés continuar con la ubicación escrita.' : locationState === 'ok' ? 'Las coordenadas se incluirán en tu solicitud.' : ''}</p>
+                  </div>
+                  <div className="sos-field">
+                    <label htmlFor="sos-people">Personas afectadas</label>
+                    <div className="sos-people-row">
+                      <span className="sos-people-icon"><Users size={24} aria-hidden="true" /></span>
+                      <div className="sos-stepper">
+                        <button type="button" disabled={people <= 1} onClick={() => setPeople(current => Math.max(1, current - 1))} aria-label="Quitar una persona"><Minus size={22} aria-hidden="true" /></button>
+                        <input id="sos-people" type="number" inputMode="numeric" min={1} max={1000} required value={people} onChange={event => setPeople(event.target.value === '' ? '' : Number(event.target.value))} onBlur={() => setPeople(current => Math.min(1000, Math.max(1, Number(current) || 1)))} />
+                        <button type="button" disabled={people >= 1000} onClick={() => setPeople(current => Math.min(1000, Number(current) + 1))} aria-label="Agregar una persona"><Plus size={22} aria-hidden="true" /></button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="sos-field">
+                    <label htmlFor="sos-message">Descripción <span className="sos-optional">(opcional)</span></label>
+                    <div className="sos-input-wrap sos-textarea-wrap"><MessageSquareText size={22} aria-hidden="true" /><textarea id="sos-message" value={message} onChange={event => setMessage(event.target.value)} maxLength={500} rows={3} placeholder="Contanos qué ocurre y qué ayuda necesitan." aria-describedby="sos-message-count" /></div>
+                    <p className="sos-character-count" id="sos-message-count">{message.length}/500</p>
+                  </div>
+                  <details className="sos-additional">
+                    <summary>Datos adicionales<span>Opcional</span><ChevronDown size={18} aria-hidden="true" /></summary>
+                    <div className="sos-additional-content">
+                      <div className="sos-field"><label htmlFor="sos-name">Tu nombre</label><input className="sos-name-input" id="sos-name" value={name} onChange={event => setName(event.target.value)} maxLength={120} autoComplete="name" placeholder="Nombre de la persona de contacto" /></div>
+                      <fieldset className="sos-priority-options"><legend>Prioridad de la solicitud</legend>{PRIORITIES.map(option => <label key={option.value}><input type="radio" name="sos-priority" value={option.value} checked={priority === option.value} onChange={() => setPriority(option.value)} /><span><strong>{option.label}</strong><small>{option.hint}</small></span></label>)}</fieldset>
+                    </div>
+                  </details>
+                </fieldset>
+                {error && <div className="sos-request-error" role="alert" ref={errorRef} tabIndex={-1}><AlertTriangle size={21} aria-hidden="true" /><p>{error}</p></div>}
+                <button className="sos-send-button" type="submit" disabled={sending}>{sending ? <LoaderCircle className="sos-spinner" size={22} aria-hidden="true" /> : <Send size={22} aria-hidden="true" />}{sending ? 'Enviando solicitud…' : 'Enviar solicitud SOS'}</button>
+                <p className="sos-form-notice"><ShieldCheck size={15} aria-hidden="true" /><span>Tu solicitud se registra en la central local. Este prototipo no reemplaza a los servicios oficiales de emergencia.</span></p>
+              </form>
+            </>
           )}
-
-          <button
-            type="submit"
-            disabled={sending}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500 px-5 py-4 text-base font-bold text-white shadow-lg shadow-red-950/40 transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Send size={19} />
-            {sending ? 'Enviando solicitud…' : 'Enviar solicitud de auxilio'}
-          </button>
-
-          <p className="flex items-start gap-2 text-[11px] leading-5 text-slate-500">
-            <Activity size={14} className="mt-0.5 shrink-0" />
-            Prototipo académico. No reemplaza a los servicios de emergencia oficiales. Recibir la
-            solicitud no confirma que la ayuda ya esté en camino.
-          </p>
-        </form>
-
-        <a
-          href="/"
-          className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-600 transition hover:text-slate-400"
-        >
-          <ArrowLeft size={14} /> Volver al centro de operaciones
-        </a>
+          <LandscapeFooter success={Boolean(receipt)} />
+        </section>
       </div>
     </main>
   )
