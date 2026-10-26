@@ -1,0 +1,38 @@
+# Variables y secretos
+.env
+*.env
+!.env.example
+
+# Frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+.tmp/
+
+# IDE / sistema operativo
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.agents/
+skills-lock.json
+.DS_Store
+Thumbs.db
+
+# Logs y datos locales
+*.log
+backend/instance/
+mysql_data/
+
+# Arduino
+firmware/**/config.h
+
