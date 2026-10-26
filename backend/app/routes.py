@@ -1,11 +1,13 @@
 from flask import Blueprint, jsonify, request
 from sqlalchemy import text
 
-from .extensions import db
+from .extensions import db, limiter
 from .models import SolicitudSOS
+from .security import auth_required, get_current_user
 from .services import (
     VALID_PRIORITIES,
     VALID_STATUSES,
+    registrar_actividad,
     registrar_historial,
     registrar_solicitud,
 )
@@ -41,6 +43,7 @@ def health():
 
 
 @api.get("/emergencies")
+@auth_required
 def list_emergencies():
     query = SolicitudSOS.query
     status = request.args.get("status")
@@ -54,6 +57,7 @@ def list_emergencies():
 
 
 @api.post("/emergencies")
+@limiter.limit("30 per minute")
 def create_emergency():
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
@@ -97,6 +101,7 @@ def create_emergency():
 
 
 @api.patch("/emergencies/<int:emergency_id>")
+@auth_required
 def update_emergency(emergency_id):
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
@@ -113,7 +118,20 @@ def update_emergency(emergency_id):
         if status != solicitud.estado:
             estado_anterior = solicitud.estado
             solicitud.estado = status
-            registrar_historial(solicitud, estado_anterior, status)
+            user = get_current_user()
+            registrar_historial(
+                solicitud,
+                estado_anterior,
+                status,
+                usuario=user,
+            )
+            registrar_actividad(
+                user,
+                "emergency_status",
+                f"{solicitud.codigo_mensaje}: estado {estado_anterior} → {status}",
+                "solicitud",
+                solicitud.id_solicitud,
+            )
 
     if "priority" in payload:
         priority = str(payload["priority"]).strip().lower()

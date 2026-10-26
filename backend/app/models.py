@@ -98,11 +98,69 @@ class Usuario(db.Model):
     id_usuario = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(100), nullable=False)
     usuario = db.Column(db.String(50), nullable=False, unique=True)
+    correo = db.Column(db.String(120), nullable=True, unique=True)
     contrasena = db.Column(db.String(255), nullable=False)
     rol = db.Column(db.String(30), nullable=False)
+    activo = db.Column(db.Boolean, nullable=False, default=True)
+    ultimo_acceso = db.Column(db.DateTime(timezone=True), nullable=True)
     fecha_registro = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
     historial = db.relationship("HistorialEstado", back_populates="usuario")
+    actividad = db.relationship("Actividad", back_populates="usuario")
+
+
+class ConfiguracionCentral(db.Model):
+    __tablename__ = "ConfiguracionCentral"
+
+    id_configuracion = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(100), nullable=False)
+    ubicacion = db.Column(db.String(150), nullable=False)
+    actualizado_en = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow
+    )
+
+    def to_dict(self):
+        actualizado = self.actualizado_en
+        if actualizado is not None and actualizado.tzinfo is None:
+            actualizado = actualizado.replace(tzinfo=timezone.utc)
+        return {
+            "name": self.nombre,
+            "location": self.ubicacion,
+            "updated_at": actualizado.isoformat() if actualizado else None,
+        }
+
+
+class Actividad(db.Model):
+    __tablename__ = "Actividad"
+
+    id_actividad = db.Column(db.Integer, primary_key=True)
+    id_usuario = db.Column(
+        db.Integer, db.ForeignKey("Usuarios.id_usuario"), nullable=True
+    )
+    accion = db.Column(db.String(50), nullable=False)
+    descripcion = db.Column(db.String(255), nullable=False)
+    entidad = db.Column(db.String(40), nullable=True)
+    entidad_id = db.Column(db.Integer, nullable=True)
+    fecha = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
+
+    usuario = db.relationship("Usuario", back_populates="actividad")
+
+    def to_dict(self):
+        fecha = self.fecha
+        if fecha is not None and fecha.tzinfo is None:
+            fecha = fecha.replace(tzinfo=timezone.utc)
+        return {
+            "id": self.id_actividad,
+            "action": self.accion,
+            "description": self.descripcion,
+            "entity": self.entidad,
+            "entity_id": self.entidad_id,
+            "actor": self.usuario.nombre if self.usuario else "Sistema",
+            "actor_role": self.usuario.rol if self.usuario else "sistema",
+            "created_at": fecha.isoformat() if fecha else None,
+        }
 
 
 class HistorialEstado(db.Model):

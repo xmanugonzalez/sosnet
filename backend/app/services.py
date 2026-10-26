@@ -2,6 +2,7 @@ from uuid import uuid4
 
 from .extensions import db
 from .models import (
+    Actividad,
     Dispositivo,
     HistorialEstado,
     RegistroComunicacion,
@@ -53,6 +54,7 @@ def obtener_usuario_sistema():
             usuario="sistema",
             contrasena="!",
             rol="sistema",
+            activo=False,
             fecha_registro=utcnow(),
         )
         db.session.add(usuario)
@@ -60,15 +62,28 @@ def obtener_usuario_sistema():
     return usuario
 
 
-def registrar_historial(solicitud, estado_anterior, estado_nuevo, observacion=None):
+def registrar_historial(solicitud, estado_anterior, estado_nuevo, usuario=None, observacion=None):
     db.session.add(
         HistorialEstado(
             solicitud=solicitud,
-            usuario=obtener_usuario_sistema(),
+            usuario=usuario or obtener_usuario_sistema(),
             estado_anterior=estado_anterior,
             estado_nuevo=estado_nuevo,
             fecha_cambio=utcnow(),
             observacion=observacion,
+        )
+    )
+
+
+def registrar_actividad(usuario, accion, descripcion, entidad=None, entidad_id=None):
+    db.session.add(
+        Actividad(
+            usuario=usuario,
+            accion=str(accion)[:50],
+            descripcion=str(descripcion)[:255],
+            entidad=str(entidad)[:40] if entidad else None,
+            entidad_id=entidad_id,
+            fecha=utcnow(),
         )
     )
 

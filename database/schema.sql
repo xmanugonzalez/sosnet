@@ -97,10 +97,16 @@ CREATE TABLE IF NOT EXISTS Usuarios (
         COMMENT 'Nombre completo del usuario',
     usuario VARCHAR(50) NOT NULL
         COMMENT 'Nombre de usuario para iniciar sesión',
+    correo VARCHAR(120) NULL
+        COMMENT 'Correo electrónico para iniciar sesión',
     contrasena VARCHAR(255) NOT NULL
         COMMENT 'Contraseña protegida mediante hash',
     rol VARCHAR(30) NOT NULL
         COMMENT 'Rol del usuario en el sistema',
+    activo TINYINT(1) NOT NULL DEFAULT 1
+        COMMENT 'Indica si el usuario puede iniciar sesión',
+    ultimo_acceso DATETIME NULL
+        COMMENT 'Último inicio de sesión correcto',
     fecha_registro DATETIME NOT NULL
         COMMENT 'Fecha de registro del usuario',
     CONSTRAINT PK_Usuarios PRIMARY KEY (id_usuario)
@@ -109,6 +115,44 @@ CREATE TABLE IF NOT EXISTS Usuarios (
 
 CREATE UNIQUE INDEX UQ_Usuarios_Usuario
     ON Usuarios (usuario);
+
+CREATE UNIQUE INDEX UQ_Usuarios_Correo
+    ON Usuarios (correo);
+
+CREATE TABLE IF NOT EXISTS ConfiguracionCentral (
+    id_configuracion INT NOT NULL AUTO_INCREMENT
+        COMMENT 'Identificador de la configuración',
+    nombre VARCHAR(100) NOT NULL
+        COMMENT 'Nombre visible de la central',
+    ubicacion VARCHAR(150) NOT NULL
+        COMMENT 'Ciudad o comunidad de la central',
+    actualizado_en DATETIME NOT NULL
+        COMMENT 'Fecha de la última actualización',
+    CONSTRAINT PK_ConfiguracionCentral PRIMARY KEY (id_configuracion)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Configuración institucional de la central SOSNET';
+
+CREATE TABLE IF NOT EXISTS Actividad (
+    id_actividad INT NOT NULL AUTO_INCREMENT
+        COMMENT 'Identificador del evento de auditoría',
+    id_usuario INT NULL
+        COMMENT 'Usuario que realizó la acción',
+    accion VARCHAR(50) NOT NULL
+        COMMENT 'Tipo de acción registrada',
+    descripcion VARCHAR(255) NOT NULL
+        COMMENT 'Descripción legible del evento',
+    entidad VARCHAR(40) NULL
+        COMMENT 'Entidad afectada por la acción',
+    entidad_id INT NULL
+        COMMENT 'Identificador de la entidad afectada',
+    fecha DATETIME NOT NULL
+        COMMENT 'Fecha y hora del evento',
+    CONSTRAINT PK_Actividad PRIMARY KEY (id_actividad)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Auditoría de acciones administrativas y de operación';
+
+CREATE INDEX IX_Actividad_Fecha ON Actividad (fecha);
+CREATE INDEX IX_Actividad_Usuario ON Actividad (id_usuario);
 
 CREATE TABLE IF NOT EXISTS HistorialEstados (
     id_historial INT NOT NULL AUTO_INCREMENT
@@ -169,4 +213,11 @@ ALTER TABLE HistorialEstados
     FOREIGN KEY (id_usuario)
     REFERENCES Usuarios (id_usuario)
     ON DELETE NO ACTION
+    ON UPDATE NO ACTION;
+
+ALTER TABLE Actividad
+    ADD CONSTRAINT Usuarios_Actividad_fk
+    FOREIGN KEY (id_usuario)
+    REFERENCES Usuarios (id_usuario)
+    ON DELETE SET NULL
     ON UPDATE NO ACTION;

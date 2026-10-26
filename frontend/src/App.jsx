@@ -2,6 +2,7 @@ import { createElement, useCallback, useEffect, useState } from 'react'
 import logo from './assets/logo.png'
 import Access from './Access.jsx'
 import AdminPanel from './AdminPanel.jsx'
+import { apiFetch, clearToken, getToken } from './api.js'
 import {
   Activity,
   AlertTriangle,
@@ -30,8 +31,6 @@ import {
   Waves,
   X,
 } from 'lucide-react'
-
-const API_URL = import.meta.env.VITE_API_URL || '/api'
 
 const STATUS_LABELS = {
   pending: 'Pendiente',
@@ -97,14 +96,8 @@ export default function App() {
   const [notice, setNotice] = useState('')
   const [changing, setChanging] = useState(false)
   const [session, setSession] = useState(null)
-  const [operators, setOperators] = useState([
-    {
-      id: 'demo-operator',
-      name: 'Operador de central',
-      email: 'operador@sosnet.local',
-      active: true,
-    },
-  ])
+  const [booting, setBooting] = useState(true)
+  const [operators, setOperators] = useState([])
   const [settings, setSettings] = useState({
     name: 'Central de rescate',
     location: 'Asunción, Paraguay',
@@ -113,29 +106,7 @@ export default function App() {
   const isAdmin = session?.role === 'admin'
   const adminTabs = ['Operadores', 'Configuración', 'Actividad']
 
-  function recordActivity(description, actor = session?.name) {
-    setActivity((items) => [
-      {
-        id: crypto.randomUUID(),
-        description,
-        actor,
-        time: new Date().toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' }),
-      },
-      ...items,
-    ])
-  }
-
-  function login(user) {
-    setSession(user)
-    setTab('Resumen')
-    recordActivity(
-      `Inicio de sesión de ${user.role === 'admin' ? 'administrador' : 'operador'}.`,
-      user.name,
-    )
-  }
-
-  function logout() {
-    recordActivity('Se cerró la sesión.')
+  const resetSessionState = useCallback(() => {
     setSession(null)
     setSelected(null)
     setTab('Resumen')
@@ -143,28 +114,101 @@ export default function App() {
     setNotice('')
     setQuery('')
     setFilter('all')
+    setReports([])
+    setOperators([])
+    setActivity([])
+  }, [])
+
+  function login(user) {
+    setSession(user)
+    setTab('Resumen')
+    setNotice('')
+    setError('')
   }
 
-  const loadEmergencies = useCallback(async () => {
+  async function logout() {
     try {
-      const response = await fetch(`${API_URL}/emergencies`)
-      if (!response.ok) throw new Error('La central no respondió')
-      const data = await response.json()
-      setReports(data.map(mapEmergency))
-      setError('')
-      setLastUpdated(new Date())
+      await apiFetch('/auth/logout', { method: 'POST' })
     } catch {
-      setError('No se pudieron cargar las solicitudes. Verifica la conexión con la central.')
-    } finally {
-      setLoading(false)
+      /* La sesión local se cierra aunque el servidor no responda. */
+    }
+    clearToken()
+    resetSessionState()
+  }
+
+  const refreshAdminData = useCallback(async () => {
+    if (!session) return
+    try {
+      const requests = [apiFetch('/settings')]
+      if (session.role === 'admin') {
+        requests.push(apiFetch('/users'), apiFetch('/activity'))
+      }
+      const [nextSettings, users, log] = await Promise.all(requests)
+      setSettings(nextSettings)
+      if (users) setOperators(users)
+      if (log) setActivity(log)
+    } catch (refreshError) {
+      if (refreshError.status !== 401) {
+        setError('No se pudieron cargar los datos de la central.')
+      }
+    }
+  }, [session])
+
+  useEffect(() => {
+    if (!getToken()) {
+      setBooting(false)
+      return
+    }
+
+    let active = true
+    apiFetch('/auth/me')
+      .then(({ user }) => {
+        if (active) setSession(user)
+      })
+      .catch(() => {
+        if (active) clearToken()
+      })
+      .finally(() => {
+        if (active) setBooting(false)
+      })
+
+    return () => {
+      active = false
     }
   }, [])
 
   useEffect(() => {
+    window.addEventListener('sosnet:unauthorized', resetSessionState)
+    return () => window.removeEventListener('sosnet:unauthorized', resetSessionState)
+  }, [resetSessionState])
+
+  useEffect(() => {
+    if (session) refreshAdminData()
+  }, [session, refreshAdminData])
+
+  const loadEmergencies = useCallback(async () => {
+    if (!session) return
+    try {
+      const data = await apiFetch('/emergencies')
+      setReports(data.map(mapEmergency))
+      setError('')
+      setLastUpdated(new Date())
+    } catch (loadError) {
+      if (loadError.status !== 401) {
+        setError('No se pudieron cargar las solicitudes. Verifica la conexión con la central.')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [session])
+
+  useEffect(() => {
+    if (!session) return
+    setLoading(true)
     loadEmergencies()
     const interval = setInterval(loadEmergencies, 15000)
     return () => clearInterval(interval)
-  }, [loadEmergencies])
+  }, [session, loadEmergencies])
 
   const filtered = reports.filter(
     (report) =>
@@ -176,36 +220,45 @@ export default function App() {
   const current = reports.find((report) => report.id === selected)
   const pendingCount = reports.filter((report) => report.statusKey === 'pending').length
 
-  function changeStatus(statusKey) {
+  async function changeStatus(statusKey) {
     if (!current || !session) return
     setChanging(true)
-    fetch(`${API_URL}/emergencies/${current.rawId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: statusKey }),
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error()
-        const updated = await response.json()
-        setReports((previous) =>
-          previous.map((report) =>
-            report.rawId === updated.id ? mapEmergency(updated) : report,
-          ),
-        )
-        recordActivity(`${current.id}: estado actualizado a ${STATUS_LABELS[statusKey]}.`)
-        setNotice(`Estado actualizado: ${STATUS_LABELS[statusKey]}.`)
-        setSelected(null)
+    try {
+      const updated = await apiFetch(`/emergencies/${current.rawId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: statusKey }),
       })
-      .catch(() =>
-        setNotice('No se pudo actualizar el estado. Verifica la conexión con la central.'),
+      setReports((previous) =>
+        previous.map((report) =>
+          report.rawId === updated.id ? mapEmergency(updated) : report,
+        ),
       )
-      .finally(() => setChanging(false))
+      if (isAdmin) await refreshAdminData()
+      setNotice(`Estado actualizado: ${STATUS_LABELS[statusKey]}.`)
+      setSelected(null)
+    } catch (updateError) {
+      if (updateError.status !== 401) {
+        setNotice('No se pudo actualizar el estado. Verifica la conexión con la central.')
+      }
+    } finally {
+      setChanging(false)
+    }
   }
 
   function navigate(value) {
     if (adminTabs.includes(value) && !isAdmin) return
     setTab(value)
     setMenu(false)
+  }
+
+  if (booting) {
+    return (
+      <div className="app-loading" role="status" aria-live="polite">
+        <img src={logo} alt="SOSNET" />
+        <span className="loading-pulse" />
+        <p>Verificando la sesión de la central…</p>
+      </div>
+    )
   }
 
   if (!session) return <Access onLogin={login} />
@@ -431,11 +484,10 @@ export default function App() {
               key={tab}
               tab={tab}
               operators={operators}
-              setOperators={setOperators}
               settings={settings}
-              setSettings={setSettings}
               activity={activity}
-              recordActivity={recordActivity}
+              currentUserId={session.id}
+              onRefresh={refreshAdminData}
             />
           ) : tab === 'Red de dispositivos' ? (
             <section className="panel network-panel">

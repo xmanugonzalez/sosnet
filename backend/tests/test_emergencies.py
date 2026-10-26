@@ -1,23 +1,4 @@
-import pytest
-
-from app import create_app
-
-
-class TestConfig:
-    TESTING = True
-    DEBUG = False
-    SECRET_KEY = "test"
-    SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    CORS_ORIGINS = ["http://localhost:1010"]
-    SERIAL_ENABLED = False
-
-
-@pytest.fixture
-def client():
-    app = create_app(TestConfig)
-    with app.app_context():
-        yield app.test_client()
+from app.models import Actividad, HistorialEstado, Usuario
 
 
 def test_create_emergency(client):
@@ -79,10 +60,17 @@ def test_create_emergency_rejects_invalid_coordinates(client):
     assert response.status_code == 400
 
 
-def test_list_emergencies_returns_created(client):
+def test_list_emergencies_requires_auth(client):
+    response = client.get("/api/emergencies")
+
+    assert response.status_code == 401
+    assert response.get_json()["error"] == "Token de acceso requerido"
+
+
+def test_list_emergencies_returns_created(client, auth_headers):
     client.post("/api/emergencies", json={"emergency_type": "Asistencia médica"})
 
-    response = client.get("/api/emergencies")
+    response = client.get("/api/emergencies", headers=auth_headers)
 
     assert response.status_code == 200
     emergencies = response.get_json()
@@ -90,32 +78,58 @@ def test_list_emergencies_returns_created(client):
     assert emergencies[0]["emergency_type"] == "Asistencia médica"
 
 
-def test_update_emergency_status(client):
+def test_update_emergency_status(client, auth_headers):
     created = client.post(
         "/api/emergencies", json={"emergency_type": "Inundación"}
     ).get_json()
 
     response = client.patch(
-        f"/api/emergencies/{created['id']}", json={"status": "in_progress"}
+        f"/api/emergencies/{created['id']}",
+        json={"status": "in_progress"},
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
     assert response.get_json()["status"] == "in_progress"
 
 
-def test_update_emergency_rejects_invalid_status(client):
+def test_update_emergency_records_operator(app, client, auth_headers):
+    created = client.post(
+        "/api/emergencies", json={"emergency_type": "Inundación"}
+    ).get_json()
+    client.patch(
+        f"/api/emergencies/{created['id']}",
+        json={"status": "resolved"},
+        headers=auth_headers,
+    )
+
+    operator = Usuario.query.filter_by(correo="operador@sosnet.local").one()
+    history = HistorialEstado.query.order_by(HistorialEstado.id_historial.desc()).first()
+    activity = Actividad.query.filter_by(accion="emergency_status").first()
+
+    assert history.id_usuario == operator.id_usuario
+    assert history.estado_nuevo == "resolved"
+    assert activity.id_usuario == operator.id_usuario
+    assert activity.entidad_id == created["id"]
+
+
+def test_update_emergency_rejects_invalid_status(client, auth_headers):
     created = client.post(
         "/api/emergencies", json={"emergency_type": "Inundación"}
     ).get_json()
 
     response = client.patch(
-        f"/api/emergencies/{created['id']}", json={"status": "en camino"}
+        f"/api/emergencies/{created['id']}",
+        json={"status": "en camino"},
+        headers=auth_headers,
     )
 
     assert response.status_code == 400
 
 
-def test_update_missing_emergency(client):
-    response = client.patch("/api/emergencies/999", json={"status": "resolved"})
+def test_update_missing_emergency(client, auth_headers):
+    response = client.patch(
+        "/api/emergencies/999", json={"status": "resolved"}, headers=auth_headers
+    )
 
     assert response.status_code == 404
