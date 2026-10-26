@@ -3,10 +3,10 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 
 const App = lazy(() => import('./App.jsx'))
-const PublicApp = lazy(() => import('./public/PublicApp.jsx'))
+const SosForm = lazy(() => import('./SosForm.jsx'))
 const path = window.location.pathname.replace(/\/+$/, '') || '/'
-const isPublic = path === '/' || path === '/sos'
-const isAdmin = path === '/admin' || path.startsWith('/admin/')
+const isSosForm = path === '/' || path === '/sos'
+const isCentral = path === '/admin' || path.startsWith('/admin/')
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -17,14 +17,14 @@ createRoot(document.getElementById('root')).render(
         </p>
       }
     >
-      {isPublic ? (
-        <PublicApp />
-      ) : isAdmin ? (
+      {isSosForm ? (
+        <SosForm />
+      ) : isCentral ? (
         <App />
       ) : (
         <main>
           <h1>Página no encontrada</h1>
-          <a href="/">Volver a SOSNET</a>
+          <a href="/">Ir al formulario SOS</a>
         </main>
       )}
     </Suspense>
