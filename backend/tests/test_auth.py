@@ -1,3 +1,5 @@
+import pytest
+
 from app.models import Actividad, Usuario
 
 
@@ -18,6 +20,23 @@ def test_login_operator(client):
     assert data["user"]["role"] == "operador"
     assert data["user"]["active"] is True
     assert "contrasena" not in data["user"]
+
+
+@pytest.mark.parametrize(
+    "email,password,role,users_status",
+    [
+        ("operador@sosnet.local", "OperadorDemo123", "operador", 403),
+        ("admin@sosnet.local", "AdminDemo123", "admin", 200),
+    ],
+)
+def test_login_detects_account_role(client, email, password, role, users_status):
+    response = login(client, email, password)
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["user"]["role"] == role
+    headers = {"Authorization": f"Bearer {data['token']}"}
+    assert client.get("/api/users", headers=headers).status_code == users_status
 
 
 def test_login_accepts_username(client):

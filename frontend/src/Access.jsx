@@ -1,40 +1,21 @@
-import { useState } from 'react'
-import { ArrowRight, Eye, EyeOff, LifeBuoy, Radio, ShieldCheck } from 'lucide-react'
-import logo from './assets/logo.png'
+import { useRef, useState } from 'react'
+import { ArrowRight, Eye, EyeOff, Mail, LockKeyhole, LoaderCircle } from 'lucide-react'
 import { apiFetch, setToken } from './api.js'
-
-const demoAccounts = {
-  operator: {
-    email: 'operador@sosnet.local',
-    password: 'OperadorDemo123',
-    label: 'Operador',
-  },
-  admin: {
-    email: 'admin@sosnet.local',
-    password: 'AdminDemo123',
-    label: 'Administrador',
-  },
-}
+import logo from './assets/logo-sin-letra.png'
+import './access.css'
 
 export default function Access({ onLogin }) {
-  const [role, setRole] = useState('operator')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [visible, setVisible] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const showDemo = import.meta.env.DEV
-  const account = demoAccounts[role]
-
-  function selectRole(value) {
-    setRole(value)
-    setEmail('')
-    setPassword('')
-    setError('')
-  }
+  const submittingRef = useRef(false)
 
   async function submit(event) {
     event.preventDefault()
+    if (submittingRef.current) return
+    submittingRef.current = true
     setError('')
     setSubmitting(true)
     try {
@@ -43,7 +24,6 @@ export default function Access({ onLogin }) {
         body: JSON.stringify({
           identifier: email.trim(),
           password,
-          role: role === 'admin' ? 'admin' : 'operador',
         }),
       })
       setToken(data.token)
@@ -51,138 +31,65 @@ export default function Access({ onLogin }) {
     } catch (loginError) {
       setError(loginError.message || 'No se pudo iniciar sesión.')
     } finally {
+      submittingRef.current = false
       setSubmitting(false)
     }
   }
 
   return (
-    <div className="access-page">
-      <section className="access-story">
-        <img src={logo} alt="SOSNET" className="access-logo" />
-        <span className="access-kicker">
-          <Radio size={16} /> RED LOCAL DE EMERGENCIAS
-        </span>
-        <h1>
-          Cuando más importa,
-          <br />
-          seguimos conectados.
-        </h1>
-        <p>
-          Un punto de encuentro entre quienes necesitan ayuda y quienes están listos para
-          responder.
-        </p>
-        <div className="access-path">
-          <span>Comunidad</span>
-          <span>Red SOSNET</span>
-          <span>Central de rescate</span>
-        </div>
-        <small>Prototipo para comunidades de Paraguay</small>
-      </section>
-      <section className="access-form-section">
-        <div className="access-form-card">
-          <span className="eyebrow">BIENVENIDO A LA CENTRAL</span>
-          <h2>Tu lugar para ayudar.</h2>
-          <p className="access-intro">Ingresa con tu cuenta para comenzar.</p>
-          <div className="role-picker" aria-label="Tipo de acceso">
-            <button
-              type="button"
-              aria-pressed={role === 'operator'}
-              onClick={() => selectRole('operator')}
-            >
-              <LifeBuoy size={21} />
-              <strong>Operador</strong>
-              <small>Atender emergencias</small>
-            </button>
-            <button
-              type="button"
-              aria-pressed={role === 'admin'}
-              onClick={() => selectRole('admin')}
-            >
-              <ShieldCheck size={21} />
-              <strong>Administrador</strong>
-              <small>Gestionar la central</small>
-            </button>
+    <main className="central-access">
+      <section className="central-story" aria-labelledby="central-story-title">
+        <a href="/" className="central-wordmark" aria-label="SOSNET, ir al formulario SOS">
+          <div className="central-brand-line">
+            <img className="central-logo" src={logo} alt="" width="1280" height="1280" />
+            <strong><span>SOS</span>NET</strong>
           </div>
-          <form onSubmit={submit}>
-            <h3>Acceso de {role === 'admin' ? 'administrador' : 'operador'}</h3>
-            <label className="form-field">
-              Correo electrónico
-              <input
-                type="text"
-                autoComplete="username"
-                value={email}
-                onChange={(event) => {
-                  setEmail(event.target.value)
-                  setError('')
-                }}
-                required
-                placeholder="tu.usuario@sosnet.local"
-              />
-            </label>
-            <label className="form-field">
-              Contraseña
-              <span className="password-field">
-                <input
-                  type={visible ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => {
-                    setPassword(event.target.value)
-                    setError('')
-                  }}
-                  required
-                />
-                <button
-                  type="button"
-                  aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                  onClick={() => setVisible(!visible)}
-                >
-                  {visible ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </span>
-            </label>
-            {error && (
-              <p className="form-error" role="alert">
-                {error}
-              </p>
-            )}
-            <button className="primary-button login-submit" type="submit" disabled={submitting}>
-              {submitting ? 'Verificando acceso…' : `Ingresar como ${account.label.toLowerCase()}`}
-              {!submitting && <ArrowRight size={17} />}
-            </button>
-          </form>
-          {showDemo && (
-            <div className="demo-access">
-              <strong>Acceso de demostración</strong>
-              <p>Usa únicamente estos datos de ejemplo. No ingreses contraseñas personales.</p>
-              <dl>
-                <div>
-                  <dt>Correo</dt>
-                  <dd>{account.email}</dd>
-                </div>
-                <div>
-                  <dt>Contraseña</dt>
-                  <dd>{account.password}</dd>
-                </div>
-              </dl>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail(account.email)
-                  setPassword(account.password)
-                  setError('')
-                }}
-              >
-                Completar datos de prueba
-              </button>
-            </div>
-          )}
-          <p className="access-footnote">
-            La autenticación y los permisos se validan en el servidor. Las cuentas inactivas no
-            pueden ingresar.
-          </p>
+          <span>Red local de emergencias</span>
+        </a>
+        <div className="central-story-copy">
+          <span className="central-story-rule" aria-hidden="true" />
+          <h1 id="central-story-title">Tecnología que<br />conecta cuando<br /><span>más se necesita.</span></h1>
+          <p>Una red local de comunicación para que las comunidades puedan solicitar ayuda y los equipos de rescate puedan responder.</p>
         </div>
       </section>
-    </div>
+      <section className="central-login" aria-labelledby="central-login-title">
+        <div className="central-login-card">
+          <p className="central-eyebrow">Acceso a la central</p>
+          <h2 id="central-login-title">Inicia sesión</h2>
+          <p className="central-intro">Ingresa tus credenciales para acceder al sistema de gestión de emergencias.</p>
+          <form onSubmit={submit} aria-busy={submitting}>
+            <fieldset disabled={submitting} className="central-credentials">
+              <legend className="sr-only">Credenciales de acceso a la central</legend>
+              <label className="central-field" htmlFor="central-email">Correo electrónico</label>
+              <div className="central-input">
+                <Mail size={19} aria-hidden="true" />
+                <input id="central-email" type="text" inputMode="email" autoCapitalize="none" spellCheck={false} autoComplete="username" value={email}
+                  onChange={event => { setEmail(event.target.value); setError('') }}
+                  required placeholder="tu.usuario@sosnet.local" />
+              </div>
+              <label className="central-field" htmlFor="central-password">Contraseña</label>
+              <div className="central-input">
+                <LockKeyhole size={19} aria-hidden="true" />
+                <input id="central-password" type={visible ? 'text' : 'password'} autoComplete="current-password" value={password}
+                  onChange={event => { setPassword(event.target.value); setError('') }}
+                  required placeholder="Ingresa tu contraseña" />
+                <button className="central-password-toggle" type="button" aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'} aria-pressed={visible} onClick={() => setVisible(!visible)}>
+                  {visible ? <EyeOff size={19} aria-hidden="true" /> : <Eye size={19} aria-hidden="true" />}
+                </button>
+              </div>
+              <details className="central-recovery">
+                <summary>¿Olvidaste tu contraseña?</summary>
+                <p>Contacta al administrador de tu central para recuperar el acceso a tu cuenta.</p>
+              </details>
+              {error && <p className="central-error" role="alert">{error}</p>}
+              <button className="central-submit" type="submit">
+                {submitting ? 'Verificando acceso…' : 'Iniciar sesión'}
+                {submitting ? <LoaderCircle className="central-spinner" size={20} aria-hidden="true" /> : <ArrowRight size={20} aria-hidden="true" />}
+              </button>
+            </fieldset>
+          </form>
+        </div>
+      </section>
+    </main>
   )
 }

@@ -156,7 +156,7 @@ Abrir `http://localhost:1010`. Vite redirige `/api` al backend durante el desarr
 
 Las rutas desconocidas muestran “Página no encontrada” con un enlace al formulario. Para acceder al centro de operaciones, abrí `/admin` directamente.
 
-La pantalla de acceso valida el correo, la contraseña y el rol contra la tabla `Usuarios`. En desarrollo muestra las cuentas de demostración; en la compilación de producción no se muestran credenciales. El panel de administración permite crear cuentas, activarlas o desactivarlas, guardar la configuración de la central y consultar la auditoría.
+La pantalla de acceso solicita correo y contraseña. El servidor valida la cuenta y determina su rol desde la tabla `Usuarios` para abrir el acceso de administrador u operador con sus permisos correspondientes. No se muestran credenciales de demostración en el formulario. El panel de administración permite crear cuentas, activarlas o desactivarlas, guardar la configuración de la central y consultar la auditoría.
 
 ### API
 
