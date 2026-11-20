@@ -2,8 +2,9 @@ from datetime import timezone
 from functools import wraps
 
 from flask import g, jsonify
-from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
+from flask_jwt_extended import get_jwt, get_jwt_identity, verify_jwt_in_request
 
+from .db_context import set_db_identity
 from .extensions import db
 from .models import Usuario
 
@@ -15,10 +16,18 @@ def _load_current_user():
     except (TypeError, ValueError):
         return None
 
+    # La política RLS permite leer la fila propia con app.current_user_id.
+    set_db_identity(user_id, None)
     user = db.session.get(Usuario, user_id)
-    if user is not None and user.activo:
-        return user
-    return None
+    if user is None or not user.activo:
+        return None
+
+    claim_version = get_jwt().get("token_version")
+    if claim_version is None or int(claim_version) != int(user.token_version):
+        return None
+
+    set_db_identity(user.id_usuario, user.rol)
+    return user
 
 
 def serialize_user(user):

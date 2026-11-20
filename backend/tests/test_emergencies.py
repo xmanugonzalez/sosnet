@@ -93,7 +93,7 @@ def test_update_emergency_status(client, auth_headers):
     assert response.get_json()["status"] == "in_progress"
 
 
-def test_update_emergency_records_operator(app, client, auth_headers):
+def test_update_emergency_records_operator(client, auth_headers):
     created = client.post(
         "/api/emergencies", json={"emergency_type": "Inundación"}
     ).get_json()
@@ -131,5 +131,84 @@ def test_update_missing_emergency(client, auth_headers):
     response = client.patch(
         "/api/emergencies/999", json={"status": "resolved"}, headers=auth_headers
     )
+
+    assert response.status_code == 404
+
+
+def test_reports_summary_integrates_views_and_functions(client, auth_headers):
+    client.post("/api/emergencies", json={"emergency_type": "Inundación"})
+    client.post("/api/emergencies", json={"emergency_type": "Evacuación"})
+
+    response = client.get("/api/reports/summary", headers=auth_headers)
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["summary"]["total_solicitudes"] == 2
+    assert data["summary"]["pendientes"] == 2
+    assert data["summary"]["ultima_solicitud"]
+    by_type = {item["type"]: item for item in data["by_type"]}
+    assert by_type["Inundación"]["total"] == 1
+    assert by_type["Evacuación"]["total"] == 1
+
+
+def test_reports_summary_requires_auth(client):
+    assert client.get("/api/reports/summary").status_code == 401
+
+
+def test_emergency_history_uses_table_function(client, auth_headers):
+    created = client.post(
+        "/api/emergencies", json={"emergency_type": "Inundación"}
+    ).get_json()
+    client.patch(
+        f"/api/emergencies/{created['id']}",
+        json={"status": "in_progress"},
+        headers=auth_headers,
+    )
+
+    response = client.get(
+        f"/api/emergencies/{created['id']}/history", headers=auth_headers
+    )
+
+    assert response.status_code == 200
+    history = response.get_json()
+    assert len(history) == 1
+    assert history[0]["previous_status"] == "pending"
+    assert history[0]["new_status"] == "in_progress"
+    assert history[0]["operator"] == "Operador SOSNET"
+    assert history[0]["operator_role"] == "operador"
+
+
+def test_operator_sees_history_changes_made_by_admin(
+    client, auth_headers, admin_headers
+):
+    created = client.post(
+        "/api/emergencies", json={"emergency_type": "Inundación"}
+    ).get_json()
+    client.patch(
+        f"/api/emergencies/{created['id']}",
+        json={"status": "in_progress"},
+        headers=auth_headers,
+    )
+    client.patch(
+        f"/api/emergencies/{created['id']}",
+        json={"status": "resolved"},
+        headers=admin_headers,
+    )
+
+    response = client.get(
+        f"/api/emergencies/{created['id']}/history", headers=auth_headers
+    )
+
+    assert response.status_code == 200
+    history = response.get_json()
+    assert len(history) == 2
+    assert history[0]["new_status"] == "in_progress"
+    assert history[0]["operator"] == "Operador SOSNET"
+    assert history[1]["new_status"] == "resolved"
+    assert history[1]["operator"] == "Administrador SOSNET"
+
+
+def test_emergency_history_missing(client, auth_headers):
+    response = client.get("/api/emergencies/999/history", headers=auth_headers)
 
     assert response.status_code == 404

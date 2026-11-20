@@ -1,5 +1,9 @@
 import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
+from app.db_context import set_db_identity
+from app.extensions import db
 from app.models import Actividad, Usuario
 
 
@@ -86,6 +90,24 @@ def test_me_and_logout(client):
     assert Actividad.query.filter_by(accion="logout").count() == 1
 
 
+def test_logout_invalidates_previous_token(client):
+    token = login(client, "operador@sosnet.local", "OperadorDemo123").get_json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    assert client.get("/api/auth/me", headers=headers).status_code == 200
+    assert client.post("/api/auth/logout", headers=headers).status_code == 204
+    assert client.get("/api/auth/me", headers=headers).status_code == 401
+
+
+def test_api_role_cannot_select_password_hash(client, admin_headers):
+    admin = client.get("/api/auth/me", headers=admin_headers).get_json()["user"]
+    set_db_identity(admin["id"], "admin")
+
+    with pytest.raises(DBAPIError):
+        db.session.execute(text("SELECT contrasena FROM public.usuarios LIMIT 1"))
+    db.session.rollback()
+
+
 def test_operator_cannot_manage_users(client, auth_headers):
     response = client.get("/api/users", headers=auth_headers)
 
@@ -132,8 +154,11 @@ def test_admin_creates_and_deactivates_user(client, admin_headers):
     assert response.get_json()["active"] is False
     assert login(client, "nueva@sosnet.local", "ClaveSegura123").status_code == 401
 
-    assert Actividad.query.filter_by(accion="user_create").count() == 1
-    assert Actividad.query.filter_by(accion="user_update").count() == 1
+    activity = client.get("/api/activity", headers=admin_headers)
+    assert activity.status_code == 200
+    actions = [event["action"] for event in activity.get_json()]
+    assert "user_create" in actions
+    assert "user_update" in actions
 
 
 def test_admin_cannot_create_duplicate_user(client, admin_headers):

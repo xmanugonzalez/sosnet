@@ -12,7 +12,6 @@ from .security import (
     get_current_user,
     serialize_user,
 )
-from .services import registrar_actividad
 
 admin = Blueprint("admin", __name__)
 
@@ -112,13 +111,6 @@ def create_user():
     )
     db.session.add(user)
     db.session.flush()
-    registrar_actividad(
-        get_current_user(),
-        "user_create",
-        f"Se creó la cuenta de {user.nombre} ({role})",
-        "usuario",
-        user.id_usuario,
-    )
     db.session.commit()
     return jsonify(serialize_user(user)), 201
 
@@ -182,16 +174,10 @@ def update_user(user_id):
         if len(password) < MIN_PASSWORD_LENGTH:
             return jsonify({"error": "La contraseña debe tener al menos 8 caracteres"}), 400
         user.contrasena = generate_password_hash(password)
+        user.token_version += 1
         changed.append("contraseña")
 
     if changed:
-        registrar_actividad(
-            current,
-            "user_update",
-            f"Se actualizó la cuenta de {user.nombre}: {', '.join(changed)}",
-            "usuario",
-            user.id_usuario,
-        )
         db.session.commit()
 
     return jsonify(serialize_user(user))
@@ -222,14 +208,6 @@ def update_settings():
     settings = _get_settings()
     settings.nombre = name
     settings.ubicacion = location
-    settings.actualizado_en = utcnow()
-    registrar_actividad(
-        get_current_user(),
-        "settings_update",
-        "Se actualizó la identificación de la central",
-        "configuracion",
-        settings.id_configuracion,
-    )
     db.session.commit()
     return jsonify(settings.to_dict())
 

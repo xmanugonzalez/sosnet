@@ -6,6 +6,8 @@ class ProductionConfig:
     DEBUG = False
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {}
+    AUTO_CREATE_TABLES = False
     CORS_ORIGINS = ["http://localhost:1010"]
     SERIAL_ENABLED = False
     RATELIMIT_ENABLED = False

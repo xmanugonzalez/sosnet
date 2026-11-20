@@ -110,7 +110,7 @@ async function stop(code = 0) {
       child.kill('SIGTERM')
     }
   }
-  console.log('\nSOSNET detenido. Si MySQL está activo, puedes detenerlo con: npm run db:stop (sus datos se conservan).')
+  console.log('\nSOSNET detenido. Si PostgreSQL está activo, puedes detenerlo con: npm run db:stop (sus datos se conservan).')
 }
 
 process.on('SIGINT', () => void stop())
@@ -157,13 +157,17 @@ try {
   console.log('[SOSNET] Comprobando Docker. Docker Desktop debe estar iniciado.')
   await run('docker', ['info', '--format', '{{.ServerVersion}}'])
   if (!stopping) {
-    console.log('[SOSNET] Iniciando MySQL y esperando su healthcheck…')
+    console.log('[SOSNET] Iniciando PostgreSQL y esperando su healthcheck…')
+    console.log('[SOSNET] La primera inicialización puede tardar; el healthcheck confirma el seed antes de seguir.')
     try {
-      await run('docker', ['compose', 'up', '-d', '--wait', '--wait-timeout', '600', 'mysql'])
+      await run('docker', ['compose', 'up', '-d', '--wait', '--wait-timeout', '240', 'postgres'])
+      console.log('[SOSNET] PostgreSQL listo.')
     } catch (error) {
       if (!stopping) {
-        console.error('[SOSNET] MySQL no quedó listo. Últimos logs del contenedor:')
-        await run('docker', ['compose', 'logs', '--tail', '60', 'mysql']).catch(() => {})
+        console.error('[SOSNET] PostgreSQL no quedó listo en 4 minutos. Estado de los contenedores:')
+        await run('docker', ['compose', 'ps']).catch(() => {})
+        console.error('[SOSNET] Últimos logs del contenedor:')
+        await run('docker', ['compose', 'logs', '--tail', '60', 'postgres']).catch(() => {})
       }
       throw error
     }
@@ -190,6 +194,7 @@ try {
   if (!stopping) {
     console.log('[SOSNET] API lista: http://localhost:5000/api/health')
     console.log('[SOSNET] Frontend: http://localhost:1010 · Ctrl+C para detener los servidores.')
+    console.log('[SOSNET] Deja esta ventana abierta: el proceso queda esperando mientras Flask y Vite están activos.')
     watch(launch(process.execPath, [resolve(root, 'frontend/node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', '1010', '--strictPort'], resolve(root, 'frontend')), 'Vite')
   }
 } catch (error) {

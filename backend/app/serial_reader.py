@@ -26,8 +26,8 @@ def _save_message(app, payload):
 
         logger.info(
             "Solicitud %s almacenada desde %s",
-            solicitud.codigo_mensaje,
-            solicitud.dispositivo.codigo,
+            solicitud["codigo_mensaje"],
+            solicitud["device_id"],
         )
 
 

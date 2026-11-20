@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
 from .extensions import db, limiter
 from .models import SolicitudSOS
@@ -7,8 +8,7 @@ from .security import auth_required, get_current_user
 from .services import (
     VALID_PRIORITIES,
     VALID_STATUSES,
-    registrar_actividad,
-    registrar_historial,
+    actualizar_estado,
     registrar_solicitud,
 )
 
@@ -27,6 +27,10 @@ def _parse_coordinate(value, minimum, maximum):
     if number < minimum or number > maximum:
         return _INVALID
     return number
+
+
+def _iso(value):
+    return value.isoformat() if value is not None else None
 
 
 @api.get("/health")
@@ -97,7 +101,7 @@ def create_emergency():
         }
     )
 
-    return jsonify(solicitud.to_dict()), 201
+    return jsonify(solicitud), 201
 
 
 @api.patch("/emergencies/<int:emergency_id>")
@@ -111,33 +115,111 @@ def update_emergency(emergency_id):
     if solicitud is None:
         return jsonify({"error": "Emergencia no encontrada"}), 404
 
+    new_status = None
     if "status" in payload:
-        status = str(payload["status"]).strip().lower()
-        if status not in VALID_STATUSES:
+        new_status = str(payload["status"]).strip().lower()
+        if new_status not in VALID_STATUSES:
             return jsonify({"error": "Estado no válido"}), 400
-        if status != solicitud.estado:
-            estado_anterior = solicitud.estado
-            solicitud.estado = status
-            user = get_current_user()
-            registrar_historial(
-                solicitud,
-                estado_anterior,
-                status,
-                usuario=user,
-            )
-            registrar_actividad(
-                user,
-                "emergency_status",
-                f"{solicitud.codigo_mensaje}: estado {estado_anterior} → {status}",
-                "solicitud",
-                solicitud.id_solicitud,
-            )
 
+    new_priority = None
     if "priority" in payload:
-        priority = str(payload["priority"]).strip().lower()
-        if priority not in VALID_PRIORITIES:
+        new_priority = str(payload["priority"]).strip().lower()
+        if new_priority not in VALID_PRIORITIES:
             return jsonify({"error": "La prioridad debe ser alta, media o baja"}), 400
-        solicitud.prioridad = priority
 
-    db.session.commit()
+    try:
+        if new_status is not None and new_status != solicitud.estado:
+            actualizar_estado(
+                solicitud.id_solicitud,
+                new_status,
+                get_current_user(),
+            )
+
+        if new_priority is not None:
+            solicitud.prioridad = new_priority
+
+        db.session.commit()
+        db.session.refresh(solicitud)
+    except DBAPIError as error:
+        db.session.rollback()
+        sqlstate = getattr(error.orig, "sqlstate", None) or getattr(
+            error.orig, "pgcode", None
+        )
+        if sqlstate == "P0002":
+            return jsonify({"error": "Emergencia no encontrada"}), 404
+        if sqlstate == "42501":
+            return jsonify({"error": "No autorizado para cambiar esta emergencia"}), 403
+        if sqlstate == "22023":
+            return jsonify({"error": "Datos de emergencia no válidos"}), 400
+        raise
+
     return jsonify(solicitud.to_dict())
+
+
+@api.get("/emergencies/<int:emergency_id>/history")
+@auth_required
+def emergency_history(emergency_id):
+    solicitud = db.session.get(SolicitudSOS, emergency_id)
+    if solicitud is None:
+        return jsonify({"error": "Emergencia no encontrada"}), 404
+
+    rows = (
+        db.session.execute(
+            text("SELECT * FROM reportes.fn_historial_solicitud(:solicitud)"),
+            {"solicitud": emergency_id},
+        )
+        .mappings()
+        .all()
+    )
+
+    return jsonify(
+        [
+            {
+                "id": row["id_historial"],
+                "previous_status": row["estado_anterior"],
+                "new_status": row["estado_nuevo"],
+                "operator": row["usuario"],
+                "operator_role": row["rol"],
+                "changed_at": _iso(row["fecha_cambio"]),
+                "note": row["observacion"],
+            }
+            for row in rows
+        ]
+    )
+
+
+@api.get("/reports/summary")
+@auth_required
+def reports_summary():
+    summary = (
+        db.session.execute(
+            text("SELECT * FROM reportes.vw_estadisticas_emergencias")
+        )
+        .mappings()
+        .first()
+    )
+    by_type = (
+        db.session.execute(text("SELECT * FROM reportes.fn_estadisticas_por_tipo()"))
+        .mappings()
+        .all()
+    )
+
+    data = dict(summary) if summary else {}
+    data["ultima_solicitud"] = _iso(data.get("ultima_solicitud"))
+
+    return jsonify(
+        {
+            "summary": data,
+            "by_type": [
+                {
+                    "type": row["tipo"],
+                    "total": row["total"],
+                    "pending": row["pendientes"],
+                    "in_progress": row["en_proceso"],
+                    "resolved": row["resueltas"],
+                    "people": row["personas"],
+                }
+                for row in by_type
+            ],
+        }
+    )

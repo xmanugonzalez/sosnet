@@ -6,7 +6,8 @@
     "dev": "node scripts/dev.mjs",
     "dev:setup": "node scripts/dev-env.mjs",
     "dev:frontend": "npm --prefix frontend run dev",
-    "db:stop": "docker compose stop mysql",
+    "db:stop": "docker compose stop postgres",
+    "db:test": "powershell -NoProfile -ExecutionPolicy Bypass -File database/tests/run_tests.ps1",
     "build": "npm --prefix frontend run build",
     "lint": "npm --prefix frontend run lint",
     "preview": "npm --prefix frontend run preview"

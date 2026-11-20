@@ -1,16 +1,9 @@
 from uuid import uuid4
 
+from sqlalchemy import text
+
 from .extensions import db
-from .models import (
-    Actividad,
-    Dispositivo,
-    HistorialEstado,
-    RegistroComunicacion,
-    SolicitudSOS,
-    TipoEmergencia,
-    Usuario,
-    utcnow,
-)
+from .models import utcnow
 
 VALID_PRIORITIES = {"alta", "media", "baja"}
 VALID_STATUSES = {"pending", "in_progress", "resolved"}
@@ -20,108 +13,138 @@ def generar_codigo_mensaje():
     return f"SOS-{utcnow():%Y%m%d%H%M%S}-{uuid4().hex[:6].upper()}"
 
 
-def obtener_o_crear_tipo(nombre):
-    nombre = str(nombre or "").strip()[:100] or "Otra"
-    tipo = TipoEmergencia.query.filter_by(nombre=nombre).first()
-    if tipo is None:
-        tipo = TipoEmergencia(nombre=nombre)
-        db.session.add(tipo)
-        db.session.flush()
-    return tipo
+def registrar_solicitud(payload):
+    """Registra una solicitud mediante el procedimiento transaccional de PostgreSQL.
 
+    El procedimiento crea (si hace falta) el tipo y el dispositivo, inserta la
+    solicitud y su registro de comunicación en una sola transacción.
+    """
+    tipo = str(payload.get("emergency_type") or payload.get("type") or "").strip()[:100]
+    tipo = tipo or "Otra"
+    dispositivo = str(payload.get("device_id") or "WEB").strip()[:50] or "WEB"
+    nombre = (
+        str(payload.get("reporter_name") or payload.get("name") or "").strip()[:100]
+        or None
+    )
+    ubicacion = _construir_ubicacion(payload)
+    personas = _normalizar_personas(payload.get("people"))
+    descripcion = (
+        str(payload.get("message") or "").strip()[:500]
+        or "Solicitud de emergencia"
+    )
+    prioridad = _normalizar_prioridad(payload.get("priority"))
+    fecha = utcnow()
+    codigo = generar_codigo_mensaje()
 
-def obtener_o_crear_dispositivo(codigo):
-    codigo = str(codigo or "").strip()[:50] or "DESCONOCIDO"
-    dispositivo = Dispositivo.query.filter_by(codigo=codigo).first()
-    if dispositivo is None:
-        dispositivo = Dispositivo(
-            codigo=codigo,
-            nombre=codigo,
-            tipo="desconocido",
-            estado="activo",
-            fecha_registro=utcnow(),
+    try:
+        result = db.session.execute(
+            text(
+                """
+                CALL public.sp_registrar_solicitud(
+                    :codigo,
+                    :nombre,
+                    :tipo,
+                    :dispositivo,
+                    :ubicacion,
+                    :personas,
+                    :descripcion,
+                    :prioridad,
+                    :fecha,
+                    NULL
+                )
+                """
+            ),
+            {
+                "codigo": codigo,
+                "nombre": nombre,
+                "tipo": tipo,
+                "dispositivo": dispositivo,
+                "ubicacion": ubicacion,
+                "personas": personas,
+                "descripcion": descripcion,
+                "prioridad": prioridad,
+                "fecha": fecha,
+            },
         )
-        db.session.add(dispositivo)
-        db.session.flush()
-    return dispositivo
+        row = result.fetchone()
+        id_solicitud = row[0] if row else None
+        if id_solicitud is None:
+            raise RuntimeError("El procedimiento no devolvió el ID de la solicitud")
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+
+    return {
+        "id": id_solicitud,
+        "codigo_mensaje": codigo,
+        "device_id": dispositivo,
+        "emergency_type": tipo,
+        "message": descripcion,
+        "reporter_name": nombre,
+        "location": ubicacion,
+        "people": personas,
+        "priority": prioridad,
+        "latitude": None,
+        "longitude": None,
+        "status": "pending",
+        "received_at": fecha.isoformat(),
+    }
 
 
-def obtener_usuario_sistema():
-    usuario = Usuario.query.filter_by(usuario="sistema").first()
-    if usuario is None:
-        usuario = Usuario(
-            nombre="Sistema SOSNET",
-            usuario="sistema",
-            contrasena="!",
-            rol="sistema",
-            activo=False,
-            fecha_registro=utcnow(),
-        )
-        db.session.add(usuario)
-        db.session.flush()
-    return usuario
-
-
-def registrar_historial(solicitud, estado_anterior, estado_nuevo, usuario=None, observacion=None):
-    db.session.add(
-        HistorialEstado(
-            solicitud=solicitud,
-            usuario=usuario or obtener_usuario_sistema(),
-            estado_anterior=estado_anterior,
-            estado_nuevo=estado_nuevo,
-            fecha_cambio=utcnow(),
-            observacion=observacion,
-        )
+def actualizar_estado(solicitud_id, nuevo_estado, usuario, observacion=None):
+    """Delegación al procedimiento; el trigger registra historial y auditoría."""
+    db.session.execute(
+        text(
+            """
+            CALL public.sp_actualizar_estado(
+                :solicitud_id, :estado, :usuario, :observacion
+            )
+            """
+        ),
+        {
+            "solicitud_id": solicitud_id,
+            "estado": nuevo_estado,
+            "usuario": usuario.id_usuario,
+            "observacion": observacion,
+        },
     )
 
 
 def registrar_actividad(usuario, accion, descripcion, entidad=None, entidad_id=None):
-    db.session.add(
-        Actividad(
-            usuario=usuario,
-            accion=str(accion)[:50],
-            descripcion=str(descripcion)[:255],
-            entidad=str(entidad)[:40] if entidad else None,
-            entidad_id=entidad_id,
-            fecha=utcnow(),
-        )
-    )
-
-
-def registrar_solicitud(payload):
-    tipo = obtener_o_crear_tipo(payload.get("emergency_type") or payload.get("type"))
-    dispositivo = obtener_o_crear_dispositivo(payload.get("device_id"))
-    ahora = utcnow()
-
-    solicitud = SolicitudSOS(
-        codigo_mensaje=generar_codigo_mensaje(),
-        nombre_solicitante=(
-            str(payload.get("reporter_name") or payload.get("name") or "").strip()[:100] or None
+    db.session.execute(
+        text(
+            """
+            CALL public.sp_registrar_actividad(
+                :usuario, :accion, :descripcion, :entidad, :entidad_id
+            )
+            """
         ),
-        tipo=tipo,
-        dispositivo=dispositivo,
-        ubicacion=_construir_ubicacion(payload),
-        cantidad_personas=_normalizar_personas(payload.get("people")),
-        descripcion=(
-            str(payload.get("message") or "").strip()[:500] or "Solicitud de emergencia"
-        ),
-        prioridad=_normalizar_prioridad(payload.get("priority")),
-        estado="pending",
-        fecha_recepcion=ahora,
+        {
+            "usuario": usuario.id_usuario if usuario else None,
+            "accion": str(accion)[:50],
+            "descripcion": str(descripcion)[:255],
+            "entidad": str(entidad)[:40] if entidad else None,
+            "entidad_id": entidad_id,
+        },
     )
-    db.session.add(solicitud)
-    db.session.flush()
 
-    db.session.add(
-        RegistroComunicacion(
-            solicitud=solicitud,
-            dispositivo=dispositivo,
-            fecha_recepcion=ahora,
-            estado_recepcion="recibido",
-        )
+
+def cerrar_sesion(usuario):
+    db.session.execute(
+        text("CALL public.sp_logout_usuario(:usuario)"),
+        {"usuario": usuario.id_usuario},
     )
+
+
+def purgar_solicitudes(dias, dry_run=False):
+    result = db.session.execute(
+        text("CALL public.sp_purgar_solicitudes_antiguas(:dias, :dry_run, NULL)"),
+        {"dias": dias, "dry_run": dry_run},
+    )
+    row = result.fetchone()
     db.session.commit()
-    return solicitud
+    return row[0] if row else 0
 
 
 def _normalizar_personas(value):

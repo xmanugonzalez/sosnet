@@ -1,16 +1,15 @@
-from datetime import datetime, timedelta, timezone
-
 import click
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
+from . import db_context  # noqa: F401  (registra el contexto RLS en SQLAlchemy)
 from .admin import admin
 from .auth import auth
 from .config import Config
 from .extensions import db, jwt, limiter
-from .models import HistorialEstado, RegistroComunicacion, SolicitudSOS
 from .routes import api
 from .serial_reader import start_serial_reader
+from .services import purgar_solicitudes
 
 INSECURE_SECRETS = {
     "",
@@ -127,38 +126,23 @@ def create_app(config_class=Config):
         )
         if retention_days < 1:
             raise click.BadParameter("Los días de retención deben ser mayores que cero.")
-        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
-            days=retention_days
-        )
-        query = SolicitudSOS.query.filter(SolicitudSOS.fecha_recepcion < cutoff)
-        total = query.count()
+
+        total = purgar_solicitudes(retention_days, dry_run=dry_run)
         if total == 0:
             click.echo(f"No hay solicitudes anteriores a {retention_days} días.")
-            return
-        if dry_run:
+        elif dry_run:
             click.echo(
                 f"Se eliminarían {total} solicitudes anteriores a {retention_days} días."
             )
-            return
+        else:
+            click.echo(
+                f"Se eliminaron {total} solicitudes y sus registros asociados "
+                f"(retención de {retention_days} días)."
+            )
 
-        ids = [row.id_solicitud for row in query.with_entities(SolicitudSOS.id_solicitud)]
-        RegistroComunicacion.query.filter(
-            RegistroComunicacion.id_solicitud.in_(ids)
-        ).delete(synchronize_session=False)
-        HistorialEstado.query.filter(
-            HistorialEstado.id_solicitud.in_(ids)
-        ).delete(synchronize_session=False)
-        SolicitudSOS.query.filter(SolicitudSOS.id_solicitud.in_(ids)).delete(
-            synchronize_session=False
-        )
-        db.session.commit()
-        click.echo(
-            f"Se eliminaron {total} solicitudes y sus registros asociados "
-            f"(retención de {retention_days} días)."
-        )
-
-    with app.app_context():
-        db.create_all()
+    if app.config.get("AUTO_CREATE_TABLES"):
+        with app.app_context():
+            db.create_all()
 
     if app.config["SERIAL_ENABLED"]:
         start_serial_reader(app)

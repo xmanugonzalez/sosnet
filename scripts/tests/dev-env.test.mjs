@@ -6,10 +6,10 @@ import test from 'node:test'
 import { prepareDevEnv, repairDevSecrets } from '../dev-env.mjs'
 
 test('replaces example secrets, preserves unrelated settings and remains stable on restart', () => {
-  const source = 'DATABASE_URL=mysql://keep-this\r\nSECRET_KEY=cambiar-en-produccion\r\nJWT_SECRET_KEY=dev-only-jwt-secret-change-me-1234567890\r\n'
+  const source = 'DATABASE_URL=postgresql://keep-this\r\nSECRET_KEY=cambiar-en-produccion\r\nJWT_SECRET_KEY=dev-only-jwt-secret-change-me-1234567890\r\n'
   const result = repairDevSecrets(source)
   assert.equal(result.changed, true)
-  assert.ok(result.content.includes('DATABASE_URL=mysql://keep-this\r\n'))
+  assert.ok(result.content.includes('DATABASE_URL=postgresql://keep-this\r\n'))
   const values = result.content.split('\r\n').filter(line => /^(SECRET_KEY|JWT_SECRET_KEY)=/.test(line)).map(line => line.split('=')[1])
   assert.equal(values.length, 2)
   assert.ok(values.every(value => /^[a-f0-9]{96}$/.test(value)))

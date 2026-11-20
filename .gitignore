@@ -32,6 +32,7 @@ Thumbs.db
 *.log
 backend/instance/
 mysql_data/
+postgres_data/
 
 # Arduino
 firmware/**/config.h
