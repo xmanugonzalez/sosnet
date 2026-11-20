@@ -5,6 +5,9 @@ Supabase ya esté configurado**: en este entorno no hay credenciales de un
 proyecto remoto, por lo que las pruebas se hicieron en PostgreSQL 17 local con
 el mismo modelo de roles y claims.
 
+Para el despliegue completo del backend en Render y el frontend en Vercel,
+seguir [`DEPLOY.md`](../../DEPLOY.md). Esta guía cubre solo la base Supabase.
+
 ## 1. Crear el proyecto
 
 1. Crear un proyecto en <https://supabase.com>.
@@ -55,13 +58,16 @@ tablas.
 En `backend/.env`:
 
 ```dotenv
-DATABASE_URL=postgresql+psycopg://sosnet_api:UNA_CLAVE_LARGA_Y_UNICA@aws-0-REGION.pooler.supabase.com:5432/postgres?sslmode=require
+DATABASE_URL=postgresql+psycopg://sosnet_api.[PROJECT-REF]:UNA_CLAVE_LARGA_Y_UNICA@[POOLER-HOST]:5432/postgres?sslmode=require
 AUTO_CREATE_TABLES=false
 ```
 
+- Copiar el host desde **Connect → Session pooler**; no componerlo a mano.
+- En el shared pooler, un rol personalizado usa `sosnet_api.[PROJECT-REF]`.
 - Usar **Session pooler** (puerto 5432) o conexión directa.
 - No usar el puerto 6543 de transaction pooler para una app Flask persistente
   sin revisar el soporte de prepared statements.
+- Percent-encode la contraseña si contiene `@`, `:`, `/`, `?`, `#` o espacios.
 - `SECRET_KEY` y `JWT_SECRET_KEY` deben ser valores propios y distintos.
 
 ## 5. Verificación

@@ -156,7 +156,7 @@ erDiagram
 | `tests/` | Pruebas SQL ejecutables y runner de integración. |
 | `migrations/` | Migrador MySQL → PostgreSQL y migración 002 de seguridad. |
 | `supabase/` | Guía de despliegue y `verify.sql` para SQL Editor. |
-| `ejemplos_requisitos.sql` | Ejemplos SQL de los ocho requisitos. |
+| `examples/ejemplos_requisitos.sql` | Ejemplos SQL de los ocho requisitos (no se ejecuta en el init de Docker). |
 | `legacy/mysql/` | Esquema, seed y migración MySQL conservados como referencia. |
 
 Orden de ejecución: `00` → `09`. En Docker, la carpeta `database/` se monta en
@@ -455,8 +455,12 @@ ROLLBACK;
    directa) y configurarla en `backend/.env`:
 
    ```dotenv
-   DATABASE_URL=postgresql+psycopg://sosnet_api:UNA_CLAVE_LARGA_Y_UNICA@aws-0-REGION.pooler.supabase.com:5432/postgres?sslmode=require
+   DATABASE_URL=postgresql+psycopg://sosnet_api.[PROJECT-REF]:UNA_CLAVE_LARGA_Y_UNICA@[POOLER-HOST]:5432/postgres?sslmode=require
    ```
+
+   En el Session pooler, el host se copia desde **Connect** y un rol
+   personalizado usa el formato `sosnet_api.[PROJECT-REF]`. La contraseña debe
+   ir percent-encoded si contiene caracteres especiales.
 
 5. Verificar que las tablas y políticas existan:
 
@@ -477,7 +481,8 @@ ROLLBACK;
 La guía completa y el script de verificación están en
 [`supabase/README.md`](supabase/README.md) y
 [`supabase/verify.sql`](supabase/verify.sql). Los ejemplos SQL de los ocho
-requisitos están en [`ejemplos_requisitos.sql`](ejemplos_requisitos.sql).
+requisitos están en
+[`examples/ejemplos_requisitos.sql`](examples/ejemplos_requisitos.sql).
 
 > El proyecto Supabase remoto no se ejecutó en este entorno por falta de
 > credenciales. Los scripts están preparados para SQL Editor y se validaron en

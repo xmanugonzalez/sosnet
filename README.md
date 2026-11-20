@@ -86,9 +86,13 @@ por el backend Docker reutilizado; si no hay backend, se usa para Flask local.
 4. Configurar `backend/.env`:
 
    ```dotenv
-   DATABASE_URL=postgresql+psycopg://sosnet_api:UNA_CLAVE_LARGA_Y_UNICA@aws-0-REGION.pooler.supabase.com:5432/postgres?sslmode=require
+   DATABASE_URL=postgresql+psycopg://sosnet_api.[PROJECT-REF]:UNA_CLAVE_LARGA_Y_UNICA@[POOLER-HOST]:5432/postgres?sslmode=require
    AUTO_CREATE_TABLES=false
    ```
+
+   El host y el formato exacto del usuario se copian desde **Connect → Session
+   pooler** en Supabase. En el pooler, un rol personalizado usa
+   `sosnet_api.[PROJECT-REF]`; la contraseña debe ir percent-encoded.
 
 5. Ejecutar la API y el frontend por separado (no hace falta el PostgreSQL
    local):
@@ -118,6 +122,22 @@ Supabase está configurado hasta ejecutar la verificación en el proyecto real.
 público pasa por Flask, que aplica el límite de 30 solicitudes por minuto.
 Los hashes de contraseña no se pueden consultar por columnas y el logout
 invalida los JWT anteriores.
+
+## Despliegue
+
+La guía completa está en [`DEPLOY.md`](DEPLOY.md). La combinación recomendada y
+gratuita es:
+
+- **Supabase**: PostgreSQL gestionado.
+- **Render**: API Flask con `gunicorn` (`render.yaml` incluido).
+- **Vercel**: frontend React/Vite (`frontend/vercel.json` incluido).
+
+Orden: ejecutar los scripts en Supabase → desplegar Render → desplegar Vercel →
+actualizar `CORS_ORIGINS` en Render con el dominio de Vercel.
+
+No se debe publicar el backend en GitHub Pages: Pages solo sirve archivos
+estáticos y no ejecuta Flask. El hardware ESP32 requiere un gateway local porque
+un backend en la nube no puede leer el puerto USB.
 
 ## Base de datos
 
@@ -279,12 +299,17 @@ sosnet/
 ├── backend/             API Flask, JWT, modelos, receptor serial y pruebas
 ├── database/            Esquema PostgreSQL/Supabase, pruebas y migraciones
 │   ├── legacy/mysql/    Esquema MySQL original conservado
-│   └── migrations/      Migrador MySQL → PostgreSQL
+│   ├── examples/        Ejemplos SQL de los ocho requisitos
+│   ├── migrations/      Migrador MySQL → PostgreSQL y migración 002
+│   ├── supabase/        Guía y verificación para SQL Editor
+│   └── tests/           Pruebas SQL y runner de integración
 ├── firmware/
 │   ├── sosnet_node/     ESP32 emisor
 │   └── sosnet_receiver/ ESP32 receptor USB
-├── frontend/            React, Vite y Tailwind CSS
+├── frontend/            React, Vite, Tailwind y vercel.json
 ├── scripts/             Arranque automático del entorno de desarrollo
+├── DEPLOY.md            Guía Vercel + Render + Supabase
+├── render.yaml          Blueprint del backend en Render
 ├── docker-compose.yml   PostgreSQL y backend de desarrollo
 └── .env.example         Configuración de los contenedores
 ```
