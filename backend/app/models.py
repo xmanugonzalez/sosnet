@@ -154,7 +154,7 @@ class Usuario(db.Model):
     fecha_registro = db.Column(
         db.DateTime(timezone=True), nullable=False, default=utcnow
     )
-    supabase_uid = db.Column(Uuid, nullable=True, unique=True)
+    external_uid = db.Column(Uuid, nullable=True, unique=True)
 
     historial = db.relationship("HistorialEstado", back_populates="usuario")
     actividad = db.relationship("Actividad", back_populates="usuario")

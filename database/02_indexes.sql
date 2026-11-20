@@ -1,9 +1,4 @@
--- ============================================================================
--- SOSNET · PostgreSQL / Supabase
--- 02 · Índices
--- ============================================================================
 
--- Usuarios: el login busca por correo o usuario sin distinguir mayúsculas.
 CREATE UNIQUE INDEX IF NOT EXISTS ux_usuarios_usuario_lower
     ON public.usuarios (lower(usuario));
 

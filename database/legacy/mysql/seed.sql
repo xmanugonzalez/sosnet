@@ -29,18 +29,6 @@ SELECT 'Otra', 'Emergencia no clasificada' FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM TiposEmergencia WHERE nombre = 'Otra');
 
 INSERT INTO Dispositivos (codigo, nombre, tipo, estado, fecha_registro)
-SELECT 'NODE-001', 'Nodo emisor 01', 'emisor', 'activo', NOW() FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Dispositivos WHERE codigo = 'NODE-001');
-
-INSERT INTO Dispositivos (codigo, nombre, tipo, estado, fecha_registro)
-SELECT 'NODE-002', 'Nodo repetidor 02', 'repetidor', 'activo', NOW() FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Dispositivos WHERE codigo = 'NODE-002');
-
-INSERT INTO Dispositivos (codigo, nombre, tipo, estado, fecha_registro)
-SELECT 'NODE-003', 'Nodo receptor 03', 'receptor', 'activo', NOW() FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM Dispositivos WHERE codigo = 'NODE-003');
-
-INSERT INTO Dispositivos (codigo, nombre, tipo, estado, fecha_registro)
 SELECT 'FORMULARIO-SOS', 'Formulario web SOS', 'web', 'activo', NOW() FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM Dispositivos WHERE codigo = 'FORMULARIO-SOS');
 

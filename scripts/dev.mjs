@@ -177,7 +177,7 @@ try {
   if (!stopping && !dockerBackend) {
     await checkPort(5000)
     console.log('[SOSNET] Iniciando Flask local…')
-    // Sin reloader: evita duplicar el lector serial y permite detener todo desde esta terminal.
+    // Sin reloader: permite detener todo desde esta terminal.
     watch(launch(python, ['-m', 'flask', '--app', 'run.py', 'run', '--debug', '--no-reload', '--host', '127.0.0.1', '--port', '5000'], resolve(root, 'backend')), 'Flask')
   } else if (!stopping) {
     if (repairedEnvFiles.includes('.env')) {

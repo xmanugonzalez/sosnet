@@ -1,16 +1,3 @@
--- ============================================================================
--- SOSNET · PostgreSQL / Supabase
--- 09 · Datos iniciales
---
--- No se cargan emergencias ficticias: solo catálogos, dispositivos de
--- demostración, cuentas de acceso y configuración de la central.
---
--- Credenciales de demostración (cambiar en producción):
---   operador@sosnet.local / OperadorDemo123
---   admin@sosnet.local    / AdminDemo123
---
--- La auditoría se desactiva durante la carga para no generar eventos falsos.
--- ============================================================================
 
 SELECT set_config('app.audit_enabled', 'false', false);
 
@@ -23,9 +10,6 @@ INSERT INTO public.tipos_emergencia (nombre, descripcion) VALUES
 ON CONFLICT (nombre) DO NOTHING;
 
 INSERT INTO public.dispositivos (codigo, nombre, tipo, estado) VALUES
-    ('NODE-001', 'Nodo emisor 01', 'emisor', 'activo'),
-    ('NODE-002', 'Nodo repetidor 02', 'repetidor', 'activo'),
-    ('NODE-003', 'Nodo receptor 03', 'receptor', 'activo'),
     ('FORMULARIO-SOS', 'Formulario web SOS', 'web', 'activo')
 ON CONFLICT (codigo) DO NOTHING;
 

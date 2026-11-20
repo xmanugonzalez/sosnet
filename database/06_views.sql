@@ -1,10 +1,3 @@
--- ============================================================================
--- SOSNET · PostgreSQL / Supabase
--- 06 · Vistas del esquema reportes
---
--- Las vistas usan relaciones reales y security_invoker = true para que las
--- políticas RLS de las tablas base se apliquen al rol que consulta.
--- ============================================================================
 
 DROP VIEW IF EXISTS reportes.vw_solicitudes_detalladas CASCADE;
 CREATE VIEW reportes.vw_solicitudes_detalladas

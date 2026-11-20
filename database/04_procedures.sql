@@ -1,15 +1,4 @@
--- ============================================================================
--- SOSNET · PostgreSQL / Supabase
--- 04 · Procedimientos almacenados (CREATE PROCEDURE)
---
--- Todos los procedimientos de escritura son SECURITY DEFINER y fijan
--- search_path. No ejecutan COMMIT: la transacción la controla Flask/
--- SQLAlchemy o el cliente SQL que los invoca. Así un error revierte todo.
--- ============================================================================
 
--- ----------------------------------------------------------------------------
--- Registrar o recuperar un dispositivo por su código
--- ----------------------------------------------------------------------------
 CREATE OR REPLACE PROCEDURE public.sp_registrar_dispositivo(
     p_codigo text,
     INOUT p_id_dispositivo integer DEFAULT NULL,
@@ -32,7 +21,7 @@ BEGIN
     v_tipo   := lower(COALESCE(NULLIF(btrim(p_tipo), ''), 'desconocido'));
     v_estado := lower(COALESCE(NULLIF(btrim(p_estado), ''), 'activo'));
 
-    IF v_tipo NOT IN ('emisor', 'repetidor', 'receptor', 'web', 'desconocido') THEN
+    IF v_tipo NOT IN ('web', 'desconocido') THEN
         RAISE EXCEPTION 'Tipo de dispositivo no válido: %', v_tipo
             USING ERRCODE = '22023';
     END IF;

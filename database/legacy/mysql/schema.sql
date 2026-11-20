@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS Dispositivos (
     id_dispositivo INT NOT NULL AUTO_INCREMENT
         COMMENT 'Identificador único del dispositivo',
     codigo VARCHAR(50) NOT NULL
-        COMMENT 'Código único del dispositivo ESP32',
+        COMMENT 'Código único del dispositivo',
     nombre VARCHAR(100) NOT NULL
         COMMENT 'Nombre identificador del dispositivo',
     tipo VARCHAR(30) NOT NULL
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS Dispositivos (
         COMMENT 'Fecha de registro del dispositivo',
     CONSTRAINT PK_Dispositivos PRIMARY KEY (id_dispositivo)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Almacena los dispositivos ESP32 de SOSNET';
+  COMMENT='Almacena los dispositivos de SOSNET';
 
 CREATE UNIQUE INDEX UQ_Dispositivos_Codigo
     ON Dispositivos (codigo);
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS SolicitudesSOS (
     id_tipo INT NOT NULL
         COMMENT 'Tipo de emergencia de la solicitud',
     id_dispositivo INT NOT NULL
-        COMMENT 'Dispositivo ESP32 que originó la solicitud',
+        COMMENT 'Dispositivo dispositivo que originó la solicitud',
     ubicacion VARCHAR(255) NOT NULL
         COMMENT 'Ubicación indicada por la persona afectada',
     cantidad_personas INT NOT NULL

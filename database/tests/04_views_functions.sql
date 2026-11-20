@@ -51,7 +51,7 @@ BEGIN
     END IF;
 
     SELECT reportes.fn_dispositivos_activos() INTO v_activos;
-    IF v_activos <> 4 THEN
+    IF v_activos <> 1 THEN
         RAISE EXCEPTION 'fn_dispositivos_activos devolvió %', v_activos;
     END IF;
 
@@ -136,7 +136,7 @@ BEGIN
     END IF;
 
     SELECT count(*) INTO v_count FROM reportes.vw_resumen_dispositivos;
-    IF v_count <> 4 THEN
+    IF v_count <> 1 THEN
         RAISE EXCEPTION 'vw_resumen_dispositivos devolvió % filas', v_count;
     END IF;
 

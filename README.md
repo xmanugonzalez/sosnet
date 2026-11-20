@@ -1,29 +1,28 @@
 # SOSNET
 
-SOSNET recibe solicitudes de emergencia mediante una red local de ESP32 con
-ESP-NOW. Un ESP32 receptor entrega cada alerta por USB/serial a una API Flask,
-que la almacena en PostgreSQL (local o Supabase) y la expone a una interfaz
-React.
+SOSNET es una plataforma web para registrar y gestionar solicitudes de
+emergencia. El formulario público está hecho en React y envía las solicitudes a
+una API Flask, que las guarda en PostgreSQL local y las muestra en el panel de
+la central.
 
 ## Arquitectura
 
 ```text
-Celular / botón SOS → ESP32 emisor → ESP-NOW → ESP32 receptor
-                                                    │ USB serial (JSON)
-                                                    ▼
-React + Vite ◀── HTTP/JSON ── Flask + JWT ── SQLAlchemy/psycopg ── PostgreSQL
-                                                                  (Supabase)
+React + Vite  ◀── HTTP/JSON ──  Flask + JWT  ──  PostgreSQL local
+   /sos                            /api                Docker
+   /admin
 ```
 
 - `public`: tablas y objetos de aplicación.
 - `auditoria`: historial de estados y actividad.
 - `reportes`: vistas y funciones administrativas.
-- La API usa JWT propio de Flask y un rol PostgreSQL de mínimo privilegio.
-- RLS protege las tablas para la API y para clientes Supabase.
+- La API usa JWT propio de Flask y RLS de PostgreSQL.
+- Todo el sistema funciona en la computadora local; no requiere servicios en la
+  nube ni hardware externo.
 
-La documentación completa de la base (diagrama ER, procedimientos, triggers,
-vistas, funciones, esquemas, transacciones, RLS y evidencias de pruebas) está en
-[`database/README.md`](database/README.md).
+La documentación de la base, con el detalle de los ocho requisitos académicos,
+está en [`database/README.md`](database/README.md). Los ejemplos SQL están en
+[`database/examples/ejemplos_requisitos.sql`](database/examples/ejemplos_requisitos.sql).
 
 ## Requisitos
 
@@ -31,10 +30,10 @@ vistas, funciones, esquemas, transacciones, RLS y evidencias de pruebas) está e
 - Docker Desktop iniciado con contenedores Linux, o Docker Engine con Docker
   Compose v2 en Linux.
 - Python 3.11 o superior. El arranque automático lo usa cuando el backend no está
-  en Docker; si usas el contenedor `sosnet-backend`, no hace falta.
-- Internet para descargar dependencias e imágenes en el primer arranque.
-- Arduino IDE 2.x con el paquete ESP32 de Espressif y dos ESP32 para probar el
-  enlace de hardware. No son necesarios para abrir la plataforma.
+  en Docker.
+- Internet para descargar dependencias e imágenes la primera vez.
+
+No se necesita hardware externo.
 
 ## Inicio local con un solo comando
 
@@ -48,11 +47,10 @@ El comando:
 
 1. Crea los `.env` que falten desde sus ejemplos.
 2. Genera `SECRET_KEY` y `JWT_SECRET_KEY` aleatorias y distintas si faltan o son
-   valores de ejemplo. No muestra los secretos ni los versiona.
+   valores de ejemplo.
 3. Instala las dependencias del frontend y del backend.
-4. Inicia PostgreSQL 17 con Docker. En un volumen nuevo ejecuta automáticamente
-   `database/00_schemas.sql` … `database/09_seed.sql` y habilita el rol local
-   `sosnet_api`.
+4. Inicia PostgreSQL 17 con Docker y aplica `database/00_schemas.sql` …
+   `database/09_seed.sql` en un volumen nuevo.
 5. Inicia Flask en `http://127.0.0.1:5000`.
 6. Inicia Vite en `http://localhost:1010`.
 
@@ -72,80 +70,13 @@ npm run dev
 Los puertos 5432 y 1010 deben estar libres. El puerto 5000 puede estar ocupado
 por el backend Docker reutilizado; si no hay backend, se usa para Flask local.
 
-## Usar Supabase
+## Base de datos local
 
-1. Crear el proyecto en Supabase.
-2. En **SQL Editor**, ejecutar en orden los archivos `database/00_schemas.sql` a
-   `database/09_seed.sql`.
-3. Definir la contraseña del rol de la API:
-
-   ```sql
-   ALTER ROLE sosnet_api WITH LOGIN PASSWORD 'UNA_CLAVE_LARGA_Y_UNICA';
-   ```
-
-4. Configurar `backend/.env`:
-
-   ```dotenv
-   DATABASE_URL=postgresql+psycopg://sosnet_api.[PROJECT-REF]:UNA_CLAVE_LARGA_Y_UNICA@[POOLER-HOST]:5432/postgres?sslmode=require
-   AUTO_CREATE_TABLES=false
-   ```
-
-   El host y el formato exacto del usuario se copian desde **Connect → Session
-   pooler** en Supabase. En el pooler, un rol personalizado usa
-   `sosnet_api.[PROJECT-REF]`; la contraseña debe ir percent-encoded.
-
-5. Ejecutar la API y el frontend por separado (no hace falta el PostgreSQL
-   local):
-
-   ```powershell
-   Set-Location backend
-   .\.venv\Scripts\Activate.ps1
-   flask --app run.py run --debug
-   ```
-
-   ```powershell
-   npm run dev:frontend
-   ```
-
-Nunca uses la `service_role key` en Flask ni en React. La API conecta con
-`sosnet_api`, que no es superusuario y está sujeto a RLS. La autenticación sigue
-siendo el JWT de Flask; la columna opcional `usuarios.supabase_uid` permite
-adoptar Supabase Auth más adelante sin duplicar identidades.
-
-La guía paso a paso y el script de verificación están en
-[`database/supabase/README.md`](database/supabase/README.md) y
-[`database/supabase/verify.sql`](database/supabase/verify.sql). El proyecto
-remoto no se ejecutó en este entorno por falta de credenciales: no afirmes que
-Supabase está configurado hasta ejecutar la verificación en el proyecto real.
-
-`anon` no ejecuta procedimientos de escritura directamente; el formulario
-público pasa por Flask, que aplica el límite de 30 solicitudes por minuto.
-Los hashes de contraseña no se pueden consultar por columnas y el logout
-invalida los JWT anteriores.
-
-## Despliegue
-
-La guía completa está en [`DEPLOY.md`](DEPLOY.md). La combinación recomendada y
-gratuita es:
-
-- **Supabase**: PostgreSQL gestionado.
-- **Render**: API Flask con `gunicorn` (`render.yaml` incluido).
-- **Vercel**: frontend React/Vite (`frontend/vercel.json` incluido).
-
-Orden: ejecutar los scripts en Supabase → desplegar Render → desplegar Vercel →
-actualizar `CORS_ORIGINS` en Render con el dominio de Vercel.
-
-No se debe publicar el backend en GitHub Pages: Pages solo sirve archivos
-estáticos y no ejecuta Flask. El hardware ESP32 requiere un gateway local porque
-un backend en la nube no puede leer el puerto USB.
-
-## Base de datos
-
-- Motor: PostgreSQL 17 (local) o Supabase (PostgreSQL gestionado).
+- Motor: PostgreSQL 17 en Docker.
 - Esquema: `database/00_schemas.sql` a `database/09_seed.sql`.
 - Datos iniciales:
   - 5 tipos de emergencia.
-  - Dispositivos `NODE-001`, `NODE-002`, `NODE-003` y `FORMULARIO-SOS`.
+  - Dispositivo `FORMULARIO-SOS`.
   - `operador@sosnet.local` / `OperadorDemo123` — operador.
   - `admin@sosnet.local` / `AdminDemo123` — administrador.
   - Usuario interno `sistema`, inactivo y sin acceso.
@@ -157,9 +88,9 @@ un backend en la nube no puede leer el puerto USB.
   `reportes.vw_actividad_usuarios`, `reportes.vw_estadisticas_emergencias` y
   `reportes.vw_resumen_dispositivos`.
 
-> Cambia las contraseñas demo en producción. Para cambios de esquema usa un
-> archivo nuevo en `database/migrations/` o recrea el volumen `postgres_data`;
-> no edites una base en producción sin respaldo.
+> Cambia las contraseñas demo antes de una presentación real. Para cambios de
+> esquema usa un archivo nuevo en `database/migrations/` o recrea el volumen
+> `postgres_data`; no edites una base con datos sin respaldo.
 
 ## Backend
 
@@ -186,20 +117,19 @@ Comprobar la API en `http://localhost:5000/api/health`.
 
 Variables relevantes de `backend/.env`:
 
-- `DATABASE_URL`: PostgreSQL local o Supabase con `sslmode=require`.
-- `AUTO_CREATE_TABLES=false`: el esquema se crea con los scripts SQL, no con
-  `db.create_all()`.
+- `DATABASE_URL`: PostgreSQL local.
+- `AUTO_CREATE_TABLES=false`: el esquema se crea con los scripts SQL.
 - `SECRET_KEY` y `JWT_SECRET_KEY`: obligatorias y distintas en producción.
 - `JWT_ACCESS_TOKEN_HOURS`: duración del token, por defecto 8.
 - `CORS_ORIGINS`: por defecto `http://localhost:1010,http://localhost:5173`.
 - `SOS_RETENTION_DAYS`: retención de solicitudes, por defecto 90.
 - `RATELIMIT_ENABLED`: límites de login y envío público de SOS.
-- `SERIAL_ENABLED`, `SERIAL_PORT`, `SERIAL_BAUDRATE`, `SERIAL_TIMEOUT`: enlace
-  con el ESP32 receptor.
 
 La autenticación usa JWT con tokens de 8 horas. El frontend los guarda en
 `sessionStorage` y los envía como `Authorization: Bearer <token>`. Los permisos
-se validan en el backend en cada solicitud y RLS actúa como segunda capa.
+se validan en el backend en cada solicitud y RLS actúa como segunda capa. El
+logout incrementa `usuarios.token_version`, por lo que los tokens anteriores
+dejan de ser válidos.
 
 Para eliminar solicitudes antiguas y sus registros asociados:
 
@@ -218,7 +148,7 @@ npm run dev
 ```
 
 Abrir `http://localhost:1010`. Vite redirige `/api` al backend durante el
-desarrollo.
+desarrollo local.
 
 - `http://localhost:1010/` y `/sos` — formulario SOS público.
 - `http://localhost:1010/admin` y `/admin/*` — acceso del equipo y dashboard.
@@ -234,8 +164,7 @@ y consultar la auditoría.
 - `POST /api/auth/login` — inicia sesión. Campos: `identifier` (correo o
   usuario), `password`, `role` opcional (`operador` o `admin`).
 - `GET /api/auth/me` — devuelve la cuenta autenticada.
-- `POST /api/auth/logout` — registra el cierre de sesión e invalida el token
-  anterior incrementando `usuarios.token_version`.
+- `POST /api/auth/logout` — registra el cierre e invalida el token anterior.
 - `GET /api/emergencies` — últimas 100 solicitudes; requiere JWT.
 - `POST /api/emergencies` — público, limitado a 30/minuto.
 - `PATCH /api/emergencies/<id>` — actualiza `status` o `priority`; requiere JWT.
@@ -249,67 +178,39 @@ y consultar la auditoría.
 - `GET /api/activity` — últimas 100 entradas de auditoría; solo administradores.
 
 Cada solicitud crea una fila en `solicitudes_sos` y su comunicación. Cada cambio
-de estado genera historial y actividad mediante triggers. El esquema no tiene
-columnas GPS; si el formulario envía coordenadas, se agregan como texto dentro de
-`ubicacion`, igual que antes.
+de estado genera historial y actividad mediante triggers. El formulario envía
+la ubicación escrita; si el navegador agrega coordenadas GPS, se guardan como
+texto dentro de `ubicacion`.
 
-## ESP32 y enlace serial
+Ejemplo de envío público:
 
-1. Instalar en Arduino IDE el paquete **esp32 by Espressif Systems**.
-2. Abrir `firmware/sosnet_receiver/sosnet_receiver.ino`, seleccionar la placa y
-   cargarlo.
-3. Copiar la MAC que muestra el monitor serial.
-4. Copiar `firmware/sosnet_node/config.example.h` como `config.h` y colocar allí
-   la MAC receptora.
-5. Abrir y cargar `firmware/sosnet_node/sosnet_node.ino` en el ESP32 emisor.
-6. Conectar el receptor y consultar su puerto COM.
-7. En `backend/.env`, establecer `SERIAL_ENABLED=true` y ajustar `SERIAL_PORT`
-   (por ejemplo `COM3`).
-8. Reiniciar Flask. Cada mensaje válido se guardará en PostgreSQL.
+```http
+POST /api/emergencies
+Content-Type: application/json
 
-### Portal Wi-Fi del nodo emisor
-
-Al arrancar, el nodo crea la red abierta `SOSNET Emergencias` y publica el
-formulario en `http://192.168.4.1`.
-
-1. Conectar el celular a `SOSNET Emergencias`.
-2. Si el sistema operativo detecta el portal cautivo, abre el formulario; si no,
-   navegar a `http://192.168.4.1`.
-3. Completar tipo, ubicación, cantidad de personas, prioridad y detalles.
-4. Al enviar, el ESP32 transmite la solicitud por ESP-NOW al receptor.
-
-El botón físico sigue disponible entre GPIO 4 y GND (pull-up interna).
-
-> El formulario del ESP32 funciona sin internet. La pantalla `/sos` de React
-> demuestra el flujo desde la computadora y necesita conexión con la central. El
-> navegador no permite GPS sobre `http://192.168.4.1`, así que el portal solicita
-> la ubicación escrita.
-
-### Consideraciones del enlace
-
-- Emisor y receptor deben usar el canal 1; el receptor lo fija al iniciar.
-- El `struct EmergencyMessage` debe ser idéntico en ambos sketches. Si cambia,
-  recargar los dos ESP32.
-- El receptor entrega una línea JSON por emergencia.
+{
+  "emergency_type": "Inundación",
+  "device_id": "FORMULARIO-SOS",
+  "reporter_name": "María González",
+  "location": "Barrio San Francisco",
+  "people": 3,
+  "priority": "alta",
+  "message": "El agua sube rápido"
+}
+```
 
 ## Estructura
 
 ```text
 sosnet/
-├── backend/             API Flask, JWT, modelos, receptor serial y pruebas
-├── database/            Esquema PostgreSQL/Supabase, pruebas y migraciones
-│   ├── legacy/mysql/    Esquema MySQL original conservado
+├── backend/             API Flask, JWT, modelos y pruebas
+├── database/            Esquema PostgreSQL local, pruebas y migraciones
 │   ├── examples/        Ejemplos SQL de los ocho requisitos
-│   ├── migrations/      Migrador MySQL → PostgreSQL y migración 002
-│   ├── supabase/        Guía y verificación para SQL Editor
+│   ├── legacy/mysql/    Esquema MySQL histórico conservado
+│   ├── migrations/      Migrador MySQL → PostgreSQL y migración 003
 │   └── tests/           Pruebas SQL y runner de integración
-├── firmware/
-│   ├── sosnet_node/     ESP32 emisor
-│   └── sosnet_receiver/ ESP32 receptor USB
-├── frontend/            React, Vite, Tailwind y vercel.json
-├── scripts/             Arranque automático del entorno de desarrollo
-├── DEPLOY.md            Guía Vercel + Render + Supabase
-├── render.yaml          Blueprint del backend en Render
+├── frontend/            React, Vite y Tailwind CSS
+├── scripts/             Arranque automático del entorno local
 ├── docker-compose.yml   PostgreSQL y backend de desarrollo
 └── .env.example         Configuración de los contenedores
 ```
@@ -332,20 +233,26 @@ Set-Location backend
 .\.venv\Scripts\python.exe -m ruff check app tests
 ```
 
+```powershell
+npm --prefix frontend run lint
+```
+
 ## Migración desde MySQL
 
 El sistema anterior está en `database/legacy/mysql/`. El migrador
 `database/migrations/migrate_mysql_to_postgres.py` copia los datos de forma
-idempotente y remapea IDs. Instrucciones completas en
+idempotente, remapea IDs y omite los nodos de hardware de la versión anterior.
+Instrucciones completas en
 [`database/migrations/README.md`](database/migrations/README.md).
 
-## Convenciones de datos
+## Seguridad
 
-El receptor entrega una línea JSON UTF-8 por emergencia:
-
-```json
-{"device_id":"NODE-001","type":"Inundación","message":"El agua sube rápido","reporter_name":"María","location":"Barrio San Francisco","people":5,"priority":"alta","latitude":-25.2867,"longitude":-57.3333}
-```
+- Contraseñas con hash scrypt; nunca texto plano.
+- JWT de Flask; los tokens se invalidan al hacer logout.
+- `sosnet_api` no puede leer `usuarios.contrasena`; solo la función de login,
+  `SECURITY DEFINER`, accede al hash.
+- RLS protege solicitudes, usuarios, historial y actividad.
+- No se usan claves de servicios externos: todo corre en local.
 
 No se deben confirmar emergencias únicamente por haber recibido el mensaje: la
 central registra cada cambio de estado con el operador responsable y conserva la

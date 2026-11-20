@@ -1,18 +1,3 @@
--- ============================================================================
--- SOSNET · PostgreSQL / Supabase
--- 07 · Roles de PostgreSQL y privilegios
---
--- Roles internos de la base (separados de los roles funcionales admin/operador,
--- que viven en public.usuarios.rol):
---   sosnet_api      Cuenta de conexión de Flask. Sin DDL, sin BYPASSRLS.
---   sosnet_reporte  Cuenta de solo lectura para reportes agregados.
---   anon            Rol de cliente anónimo de Supabase.
---   authenticated   Rol de cliente autenticado de Supabase.
---
--- En Supabase los roles anon/authenticated ya existen: los bloques DO no los
--- recrean. La contraseña de sosnet_api se define fuera de este archivo
--- (Supabase Dashboard o database/10_local_dev_roles.sh en desarrollo).
--- ============================================================================
 
 DO $$
 BEGIN
@@ -75,8 +60,8 @@ GRANT EXECUTE ON PROCEDURE public.sp_purgar_solicitudes_antiguas(integer, boolea
     TO sosnet_api;
 
 -- ----------------------------------------------------------------------------
--- anon / authenticated: privilegios de tabla al estilo Supabase.
--- RLS es la capa que decide qué filas y operaciones se permiten.
+-- anon / authenticated: privilegios para las pruebas de RLS.
+-- RLS decide qué filas y operaciones se permiten.
 -- ----------------------------------------------------------------------------
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public
     TO anon, authenticated;
@@ -100,11 +85,11 @@ GRANT SELECT (
 REVOKE SELECT ON public.usuarios FROM sosnet_api;
 GRANT SELECT (
     id_usuario, nombre, usuario, correo, rol, activo,
-    token_version, ultimo_acceso, fecha_registro, supabase_uid
+    token_version, ultimo_acceso, fecha_registro, external_uid
 ) ON public.usuarios TO sosnet_api;
 
 -- Las altas públicas de SOS pasan por Flask, que aplica el límite de 30/min.
--- anon/authenticated no ejecutan el procedimiento directamente en Supabase.
+-- anon/authenticated no ejecutan el procedimiento directamente en local.
 GRANT EXECUTE ON PROCEDURE public.sp_registrar_solicitud(
     text, text, text, text, text, integer, text, text, timestamptz, integer
 ) TO sosnet_api;

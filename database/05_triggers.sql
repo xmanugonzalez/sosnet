@@ -1,18 +1,5 @@
--- ============================================================================
--- SOSNET · PostgreSQL / Supabase
--- 05 · Triggers y funciones trigger
---
--- Triggers implementados:
---   1. solicitudes_sos  BEFORE UPDATE           → actualiza actualizado_en.
---   2. solicitudes_sos  AFTER UPDATE OF estado  → historial + actividad.
---   3. usuarios         AFTER INSERT/UPDATE/DELETE → auditoría de cuentas.
---   4. configuracion_central BEFORE UPDATE      → actualiza actualizado_en.
---   5. configuracion_central AFTER UPDATE       → auditoría de configuración.
--- ============================================================================
-
--- ----------------------------------------------------------------------------
 -- 1. Fecha de modificación de solicitudes
--- ----------------------------------------------------------------------------
+
 CREATE OR REPLACE FUNCTION public.trg_fn_solicitud_actualizada()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -26,9 +13,8 @@ $$;
 COMMENT ON FUNCTION public.trg_fn_solicitud_actualizada() IS
   'Actualiza solicitudes_sos.actualizado_en en cada modificación.';
 
--- ----------------------------------------------------------------------------
 -- 2. Historial y auditoría automáticos del cambio de estado
--- ----------------------------------------------------------------------------
+
 CREATE OR REPLACE FUNCTION auditoria.trg_fn_historial_estado()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -39,8 +25,6 @@ DECLARE
     v_usuario integer;
     v_observacion varchar(255);
 BEGIN
-    -- Las migraciones controladas pueden importar historial ya existente sin
-    -- generar un historial duplicado por cada UPDATE.
     IF current_setting('app.migration_mode', true) = 'true' THEN
         RETURN NULL;
     END IF;
@@ -103,9 +87,8 @@ $$;
 COMMENT ON FUNCTION auditoria.trg_fn_historial_estado() IS
   'Registra historial y auditoría cuando cambia solicitudes_sos.estado.';
 
--- ----------------------------------------------------------------------------
 -- 3. Auditoría automática de cuentas
--- ----------------------------------------------------------------------------
+
 CREATE OR REPLACE FUNCTION auditoria.trg_fn_usuarios_auditoria()
 RETURNS trigger
 LANGUAGE plpgsql

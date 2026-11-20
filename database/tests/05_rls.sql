@@ -50,7 +50,7 @@ CALL public.sp_actualizar_estado(
 );
 RESET ROLE;
 
--- Actividad y mapeo de Supabase Auth para las pruebas.
+-- Actividad y mapeo de identidad externa para las pruebas.
 CALL public.sp_registrar_actividad(
     current_setting('audit.operador_id')::integer,
     'login', 'Actividad del operador'
@@ -61,11 +61,11 @@ CALL public.sp_registrar_actividad(
 );
 
 UPDATE public.usuarios
-SET supabase_uid = '11111111-1111-1111-1111-111111111111'
+SET external_uid = '11111111-1111-1111-1111-111111111111'
 WHERE id_usuario = current_setting('audit.operador_id')::integer;
 
 UPDATE public.usuarios
-SET supabase_uid = '22222222-2222-2222-2222-222222222222'
+SET external_uid = '22222222-2222-2222-2222-222222222222'
 WHERE id_usuario = current_setting('audit.admin_id')::integer;
 
 -- ----------------------------------------------------------------------------

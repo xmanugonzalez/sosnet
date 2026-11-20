@@ -99,8 +99,8 @@ BEGIN
     END IF;
 
     SELECT count(*) INTO v_count FROM public.dispositivos;
-    IF v_count <> 4 THEN
-        RAISE EXCEPTION 'Se esperaban 4 dispositivos, hay %', v_count;
+    IF v_count <> 1 THEN
+        RAISE EXCEPTION 'Se esperaba 1 dispositivo, hay %', v_count;
     END IF;
 
     SELECT count(*) INTO v_count FROM public.usuarios;

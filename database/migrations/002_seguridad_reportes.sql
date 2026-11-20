@@ -1,7 +1,7 @@
 -- ============================================================================
 -- SOSNET · Migración 002 · Seguridad de sesiones, hashes y reportes
 --
--- Aplicar una sola vez sobre una base PostgreSQL/Supabase creada con los
+-- Aplicar una sola vez sobre una base PostgreSQL local creada con los
 -- scripts 00 a 09 anteriores a esta corrección. En una instalación nueva,
 -- los cambios ya están incluidos en 01/03/04/07/08 y este archivo no es
 -- necesario.

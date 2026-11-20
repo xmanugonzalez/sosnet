@@ -1,9 +1,10 @@
 #!/usr/bin/env python
-"""Migra los datos de SOSNET desde MySQL 8 a PostgreSQL/Supabase.
+"""Migra los datos de SOSNET desde MySQL 8 a PostgreSQL local.
 
 Características:
-  * Copia usuarios, catálogos, dispositivos, configuración, solicitudes,
+  * Copia usuarios, catálogos, dispositivos web, configuración, solicitudes,
     comunicaciones, historial y actividad.
+  * Omite los nodos de hardware de la versión anterior.
   * Es idempotente: busca por claves naturales y actualiza/inserta sin duplicar.
   * Remapea IDs cuando el destino ya tiene datos (por ejemplo, el seed).
   * Activa el modo de migración para que los triggers de historial no
@@ -15,8 +16,8 @@ Uso típico (desde la raíz del proyecto):
         --mysql-url mysql+pymysql://sosnet:sosnet_dev@127.0.0.1:3306/sosnet \
         --target-url postgresql+psycopg://sosnet_admin:...@127.0.0.1:5432/sosnet
 
-En Supabase usa la conexión directa con un rol administrador solo para esta
-migración; nunca uses la service_role key ni ejecutes la app con ese rol.
+Usa un rol administrador solo para esta migración; la aplicación debe conectar
+después con sosnet_api.
 
 Requisitos: pip install PyMySQL "psycopg[binary]" SQLAlchemy
 """
@@ -53,7 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--target-url",
         default=os.getenv("TARGET_DATABASE_URL") or os.getenv("DATABASE_URL"),
-        help="URL SQLAlchemy de PostgreSQL/Supabase (o TARGET_DATABASE_URL).",
+        help="URL SQLAlchemy de PostgreSQL local (o TARGET_DATABASE_URL).",
     )
     parser.add_argument(
         "--dry-run",
@@ -174,10 +175,13 @@ def upsert_tipo(connection: Connection, row: dict[str, Any]) -> int:
 
 def upsert_dispositivo(connection: Connection, row: dict[str, Any]) -> int:
     codigo = value(row, "codigo") or "DESCONOCIDO"
+    tipo = value(row, "tipo") or "desconocido"
+    if tipo not in ("web", "desconocido"):
+        tipo = "desconocido"
     params = {
         "codigo": codigo,
         "nombre": value(row, "nombre") or codigo,
-        "tipo": value(row, "tipo") or "desconocido",
+        "tipo": tipo,
         "estado": value(row, "estado") or "activo",
         "fecha_registro": value(row, "fecha_registro"),
     }
@@ -256,6 +260,10 @@ def migrate(mysql: Connection, pg: Connection) -> dict[str, int]:
         counts["TiposEmergencia"] += 1
 
     for row in rows(mysql, "Dispositivos"):
+        # Solo se migran dispositivos web. Los nodos de hardware anteriores
+        # quedan fuera del sistema local actual.
+        if (value(row, "tipo") or "desconocido") not in ("web", "desconocido"):
+            continue
         dispositivo_map[int(value(row, "id_dispositivo"))] = upsert_dispositivo(pg, row)
         counts["Dispositivos"] += 1
 

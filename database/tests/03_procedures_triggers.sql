@@ -29,7 +29,7 @@ BEGIN
         'SOS-TEST-PROC'::text,
         'María González'::text,
         'Inundación'::text,
-        'NODE-TEST'::text,
+        'DEVICE-TEST'::text,
         'Barrio San Francisco'::text,
         3,
         'El agua sube'::text,
@@ -54,7 +54,7 @@ BEGIN
 
     SELECT id_dispositivo INTO v_dispositivo
     FROM public.dispositivos
-    WHERE codigo = 'NODE-TEST';
+    WHERE codigo = 'DEVICE-TEST';
     IF v_dispositivo IS NULL THEN
         RAISE EXCEPTION 'sp_registrar_solicitud no creó el dispositivo';
     END IF;
@@ -112,15 +112,15 @@ BEGIN
 
     -- Procedimiento de dispositivos.
     CALL public.sp_registrar_dispositivo(
-        'NODE-EXTRA'::text,
+        'DEVICE-EXTRA'::text,
         v_extra,
-        'Nodo extra'::text,
-        'emisor'::text,
+        'Dispositivo extra'::text,
+        'web'::text,
         'activo'::text
     );
     SELECT count(*) INTO v_count
     FROM public.dispositivos
-    WHERE codigo = 'NODE-EXTRA';
+    WHERE codigo = 'DEVICE-EXTRA';
     IF v_count <> 1 THEN
         RAISE EXCEPTION 'sp_registrar_dispositivo no creó el dispositivo';
     END IF;

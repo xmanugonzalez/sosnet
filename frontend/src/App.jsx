@@ -22,7 +22,6 @@ import {
   LogOut,
   MapPin,
   Menu,
-  Radio,
   RefreshCw,
   Search,
   Settings,
@@ -326,7 +325,6 @@ export default function App() {
           {[
             { name: 'Resumen', icon: LayoutDashboard },
             { name: 'Solicitudes', icon: List },
-            { name: 'Red de dispositivos', icon: Radio },
             ...(isAdmin
               ? [
                   { name: 'Operadores', icon: Users },
@@ -348,10 +346,10 @@ export default function App() {
         </nav>
         <div className="sidebar-bottom">
           <div className="offline-card">
-            <Radio size={20} />
-            <strong>La ayuda sigue conectada.</strong>
-            <p>Una red local para estar cerca, incluso sin internet.</p>
-            <span>PROTOTIPO · ESP-NOW</span>
+            <ShieldCheck size={20} />
+            <strong>Central local activa.</strong>
+            <p>Las solicitudes se gestionan en esta computadora.</p>
+            <span>SISTEMA LOCAL</span>
           </div>
           <div className="operator">
             <span className="avatar">{isAdmin ? 'AD' : 'OP'}</span>
@@ -434,20 +432,16 @@ export default function App() {
                   ? tab
                   : tab === 'Resumen'
                     ? 'Panorama de emergencias'
-                    : tab === 'Solicitudes'
-                      ? 'Solicitudes de emergencia'
-                      : 'Red de dispositivos'}
+                    : 'Solicitudes de emergencia'}
               </h1>
               <p>
                 {adminTabs.includes(tab)
                   ? 'Herramientas de administración para organizar tu central.'
-                  : tab === 'Red de dispositivos'
-                    ? 'Conoce el recorrido de las solicitudes hasta tu central.'
-                    : 'Toda la información que necesitas para coordinar la ayuda.'}
+                  : 'Toda la información que necesitas para coordinar la ayuda.'}
               </p>
             </div>
             <span className="local-label">
-              <Radio size={16} /> Operación en red local
+              <ShieldCheck size={16} /> Operación local
             </span>
           </div>
 
@@ -489,44 +483,6 @@ export default function App() {
               currentUserId={session.id}
               onRefresh={refreshAdminData}
             />
-          ) : tab === 'Red de dispositivos' ? (
-            <section className="panel network-panel">
-              <div className="section-heading">
-                <div>
-                  <h2>Una red, tres puntos de conexión</h2>
-                  <p>Recorrido previsto para el primer prototipo</p>
-                </div>
-                <span className="subtle-tag">Esquema de ejemplo</span>
-              </div>
-              <div className="network-flow">
-                {['Emisor', 'Repetidor', 'Receptor'].map((name, index) => (
-                  <article key={name}>
-                    <span className="node-symbol">
-                      <Radio size={28} />
-                    </span>
-                    <small>ESP32 · 0{index + 1}</small>
-                    <h3>{name}</h3>
-                    <p>
-                      {
-                        [
-                          'Recibe el formulario SOS desde el celular por Wi-Fi local.',
-                          'Retransmite la solicitud mediante ESP-NOW.',
-                          'Entrega la solicitud a la central mediante USB.',
-                        ][index]
-                      }
-                    </p>
-                    <span className="subtle-tag">Sin telemetría conectada</span>
-                  </article>
-                ))}
-              </div>
-              <div className="network-note">
-                <ShieldCheck size={20} />
-                <p>
-                  La conexión real de los dispositivos estará disponible al integrar el hardware.
-                  Este esquema no indica cobertura ni disponibilidad.
-                </p>
-              </div>
-            </section>
           ) : (
             <>
               <section className="stats" aria-label="Resumen de solicitudes">

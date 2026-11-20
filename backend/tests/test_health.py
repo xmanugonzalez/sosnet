@@ -9,7 +9,6 @@ class ProductionConfig:
     SQLALCHEMY_ENGINE_OPTIONS = {}
     AUTO_CREATE_TABLES = False
     CORS_ORIGINS = ["http://localhost:1010"]
-    SERIAL_ENABLED = False
     RATELIMIT_ENABLED = False
     SOS_RETENTION_DAYS = 90
 

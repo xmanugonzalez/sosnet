@@ -14,9 +14,7 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY") or "dev-only-secret"
     DEBUG = _env_bool("FLASK_DEBUG", False)
 
-    # PostgreSQL directo (desarrollo) o Supabase (producción).
-    # Ejemplo Supabase:
-    # postgresql+psycopg://sosnet_api:PASSWORD@aws-0-region.pooler.supabase.com:5432/postgres?sslmode=require
+    # PostgreSQL local para desarrollo y demostración.
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "DATABASE_URL",
         "postgresql+psycopg://sosnet_api:sosnet_api_dev@127.0.0.1:5432/sosnet",
@@ -38,10 +36,6 @@ class Config:
         ).split(",")
         if origin.strip()
     ]
-    SERIAL_ENABLED = _env_bool("SERIAL_ENABLED", False)
-    SERIAL_PORT = os.getenv("SERIAL_PORT", "COM3")
-    SERIAL_BAUDRATE = int(os.getenv("SERIAL_BAUDRATE", "115200"))
-    SERIAL_TIMEOUT = float(os.getenv("SERIAL_TIMEOUT", "1"))
 
     JWT_SECRET_KEY = (
         os.getenv("JWT_SECRET_KEY") or "dev-only-jwt-secret-change-me-1234567890"

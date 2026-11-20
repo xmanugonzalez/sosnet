@@ -3,7 +3,7 @@
 --
 -- Archivo de consulta/demostración. Las operaciones de escritura están dentro
 -- de transacciones con ROLLBACK para no dejar datos de prueba.
--- Ejecutar con psql o Supabase SQL Editor, sección por sección.
+-- Ejecutar con psql, sección por sección.
 -- ============================================================================
 
 -- ============================================================================

@@ -1,18 +1,4 @@
--- ============================================================================
--- SOSNET · PostgreSQL / Supabase
--- 03 · Funciones escalares y funciones que retornan tablas
---
--- Convenciones:
---   * Las funciones de reporte son SECURITY INVOKER: respetan RLS.
---   * Las funciones de apoyo a RLS leen el contexto de la sesión
---     (app.current_user_id / app.current_role) o los claims JWT de Supabase.
---   * fn_login_usuario es SECURITY DEFINER porque el login ocurre antes de
---     que exista una identidad autenticada.
--- ============================================================================
 
--- ----------------------------------------------------------------------------
--- Apoyo al contexto de seguridad
--- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.fn_usuario_actual()
 RETURNS integer
 LANGUAGE sql
@@ -56,7 +42,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.fn_jwt_claims() IS
-  'Claims JWT que Supabase/PostgREST publica en request.jwt.claims.';
+  'Claims JWT que publican los clientes externos en request.jwt.claims.';
 
 CREATE OR REPLACE FUNCTION public.fn_jwt_claim(p_claim text)
 RETURNS text
@@ -83,9 +69,9 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION public.fn_jwt_role() IS
-  'Rol funcional transportado en el JWT de Supabase (app_metadata.role).';
+  'Rol funcional transportado en el JWT externo (app_metadata.role).';
 
-CREATE OR REPLACE FUNCTION public.fn_usuario_supabase_actual()
+CREATE OR REPLACE FUNCTION public.fn_usuario_externo_actual()
 RETURNS integer
 LANGUAGE sql
 STABLE
@@ -94,13 +80,13 @@ SET search_path = public, pg_temp
 AS $$
     SELECT u.id_usuario
     FROM public.usuarios AS u
-    WHERE u.supabase_uid IS NOT NULL
-      AND u.supabase_uid::text = public.fn_jwt_claim('sub')
+    WHERE u.external_uid IS NOT NULL
+      AND u.external_uid::text = public.fn_jwt_claim('sub')
     LIMIT 1;
 $$;
 
-COMMENT ON FUNCTION public.fn_usuario_supabase_actual() IS
-  'Mapea auth.uid() de Supabase con la fila correspondiente de public.usuarios.';
+COMMENT ON FUNCTION public.fn_usuario_externo_actual() IS
+  'Mapea un UID externo opcional con la fila correspondiente de public.usuarios.';
 
 CREATE OR REPLACE FUNCTION public.fn_usuario_sistema_id()
 RETURNS integer
@@ -400,7 +386,7 @@ GRANT EXECUTE ON FUNCTION public.fn_rol_actual() TO PUBLIC;
 GRANT EXECUTE ON FUNCTION public.fn_jwt_claims() TO PUBLIC;
 GRANT EXECUTE ON FUNCTION public.fn_jwt_claim(text) TO PUBLIC;
 GRANT EXECUTE ON FUNCTION public.fn_jwt_role() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.fn_usuario_supabase_actual() TO PUBLIC;
+GRANT EXECUTE ON FUNCTION public.fn_usuario_externo_actual() TO PUBLIC;
 
 REVOKE ALL ON FUNCTION public.fn_login_usuario(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_usuario_sistema_id() FROM PUBLIC;

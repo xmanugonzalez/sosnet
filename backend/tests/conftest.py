@@ -30,7 +30,6 @@ class TestConfig:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     AUTO_CREATE_TABLES = False
     CORS_ORIGINS = ["http://localhost:1010"]
-    SERIAL_ENABLED = False
     RATELIMIT_ENABLED = False
     SOS_RETENTION_DAYS = 90
 
@@ -78,9 +77,6 @@ def _reset_database():
             text(
                 """
                 INSERT INTO public.dispositivos (codigo, nombre, tipo, estado) VALUES
-                    ('NODE-001', 'Nodo emisor 01', 'emisor', 'activo'),
-                    ('NODE-002', 'Nodo repetidor 02', 'repetidor', 'activo'),
-                    ('NODE-003', 'Nodo receptor 03', 'receptor', 'activo'),
                     ('FORMULARIO-SOS', 'Formulario web SOS', 'web', 'activo')
                 """
             )

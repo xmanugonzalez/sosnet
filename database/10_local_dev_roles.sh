@@ -1,13 +1,4 @@
-#!/bin/bash
-# ============================================================================
-# SOSNET · Solo para desarrollo local con Docker.
-#
-# Este archivo NO se ejecuta en Supabase. Allí la contraseña de sosnet_api se
-# define desde el Dashboard > Database > Roles o con ALTER ROLE en el editor SQL.
-#
-# En Docker, PostgreSQL ejecuta los .sql y luego este .sh al inicializar un
-# volumen nuevo. Las contraseñas llegan por variables de entorno del compose.
-# ============================================================================
+
 set -euo pipefail
 
 if [ "${SOSNET_LOCAL_ROLES:-true}" != "true" ]; then

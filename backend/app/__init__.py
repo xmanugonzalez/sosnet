@@ -8,7 +8,6 @@ from .auth import auth
 from .config import Config
 from .extensions import db, jwt, limiter
 from .routes import api
-from .serial_reader import start_serial_reader
 from .services import purgar_solicitudes
 
 INSECURE_SECRETS = {
@@ -143,8 +142,5 @@ def create_app(config_class=Config):
     if app.config.get("AUTO_CREATE_TABLES"):
         with app.app_context():
             db.create_all()
-
-    if app.config["SERIAL_ENABLED"]:
-        start_serial_reader(app)
 
     return app
