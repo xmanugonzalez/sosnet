@@ -11,7 +11,7 @@
   padding: 0;
   background: #f7faff;
   color: var(--central-ink);
-  font-family: 'Segoe UI', Arial, sans-serif;
+  font-family: system-ui, 'Segoe UI', 'Segoe UI Variable', Roboto, Helvetica, Arial, sans-serif;
 }
 body:has(.central-access) { min-width: 0; }
 .central-story {
@@ -78,7 +78,7 @@ body:has(.central-access) { min-width: 0; }
 .central-demo { margin-top: 20px; padding-top: 8px; border-top: 1px solid #e5ebf4; color: #536680; font-size: 11px; }
 .central-demo summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; }
 .central-demo summary::before { content: '+'; margin-right: 8px; }
-.central-demo[open] summary::before { content: '−'; }
+.central-demo[open] summary::before { content: '-'; }
 .central-demo p { margin: 4px 0 12px; line-height: 1.7; }
 .central-demo dl { margin: 0; }
 .central-demo dl > div { margin: 8px 0; }
