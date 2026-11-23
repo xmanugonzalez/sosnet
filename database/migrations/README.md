@@ -115,3 +115,32 @@ docker exec -i sosnet-postgres psql -U sosnet_admin -d sosnet `
 La migración es idempotente: renombra `supabase_uid` a `external_uid` y
 `fn_usuario_supabase_actual` a `fn_usuario_externo_actual` si todavía existen.
 En una instalación nueva no es necesario aplicarla.
+
+## Migración 005 · corregir texto de configuración
+
+Para bases creadas con versiones anteriores del seed que guardaron la ubicación
+como `Asunci??n, Paraguay`:
+
+```powershell
+docker exec -i sosnet-postgres psql -U sosnet_admin -d sosnet `
+  -v ON_ERROR_STOP=1 `
+  -f /docker-entrypoint-initdb.d/migrations/005_corregir_texto_configuracion.sql
+```
+
+La migración usa escapes ASCII, por lo que no depende de la codificación del
+cliente. En una instalación nueva no es necesario aplicarla.
+
+## Migración 006 · etiquetas de estado en la actividad
+
+Para bases que muestran los valores técnicos `pending`, `in_progress` y
+`resolved` en la actividad:
+
+```powershell
+docker exec -i sosnet-postgres psql -U sosnet_admin -d sosnet `
+  -v ON_ERROR_STOP=1 `
+  -f /docker-entrypoint-initdb.d/migrations/006_etiquetas_estado_actividad.sql
+```
+
+Reemplaza el trigger de historial y normaliza las filas existentes con las
+etiquetas visibles: Pendiente, En atención y Resuelta. Las instalaciones nuevas
+ya incluyen el trigger corregido en `05_triggers.sql`.

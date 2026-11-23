@@ -72,7 +72,21 @@ BEGIN
         v_usuario,
         'emergency_status',
         left(
-            NEW.codigo_mensaje || ': estado ' || OLD.estado || ' → ' || NEW.estado,
+            NEW.codigo_mensaje
+            || ': Estado '
+            || CASE OLD.estado
+                   WHEN 'pending' THEN 'Pendiente'
+                   WHEN 'in_progress' THEN 'En atención'
+                   WHEN 'resolved' THEN 'Resuelta'
+                   ELSE OLD.estado
+               END
+            || ' → '
+            || CASE NEW.estado
+                   WHEN 'pending' THEN 'Pendiente'
+                   WHEN 'in_progress' THEN 'En atención'
+                   WHEN 'resolved' THEN 'Resuelta'
+                   ELSE NEW.estado
+               END,
             255
         ),
         'solicitud',

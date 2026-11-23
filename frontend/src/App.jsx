@@ -456,10 +456,10 @@ export default function App() {
           </div>
 
           {error && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
-              <AlertTriangle size={16} />
+            <div className="alert alert-error" role="alert">
+              <AlertTriangle size={16} aria-hidden="true" />
               {error}
-              <button className="ml-auto font-semibold underline" onClick={loadEmergencies}>
+              <button className="alert-action" onClick={loadEmergencies}>
                 Reintentar
               </button>
             </div>
@@ -579,7 +579,10 @@ export default function App() {
                             onClick={() => setSelected(report.id)}
                           >
                             <div className="priority-item-top">
-                              <span className="priority high">Prioridad alta</span>
+                              <span className="priority high">
+                                <i />
+                                Prioridad alta
+                              </span>
                               <small>{report.time}</small>
                             </div>
                             <h3>{report.type}</h3>
@@ -660,12 +663,12 @@ export default function App() {
                   <table>
                     <thead>
                       <tr>
-                        <th>Solicitud</th>
-                        <th>Emergencia / ubicación</th>
-                        <th>Personas</th>
-                        <th>Prioridad</th>
-                        <th>Estado</th>
-                        <th>
+                        <th scope="col" className="col-id">Solicitud</th>
+                        <th scope="col">Emergencia / ubicación</th>
+                        <th scope="col" className="col-people">Personas</th>
+                        <th scope="col" className="col-priority">Prioridad</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col">
                           <span className="sr-only">Acción</span>
                         </th>
                       </tr>
@@ -673,7 +676,7 @@ export default function App() {
                     <tbody>
                       {filtered.map((report) => (
                         <tr key={report.id}>
-                          <td>
+                          <td className="col-id">
                             <strong className="report-id">{report.id}</strong>
                             <small>Recibida a las {report.time}</small>
                           </td>
@@ -698,13 +701,13 @@ export default function App() {
                               </div>
                             </div>
                           </td>
-                          <td>
+                          <td className="col-people">
                             <span className="people">
-                              <Users size={15} />
+                              <Users size={15} aria-hidden="true" />
                               {report.people}
                             </span>
                           </td>
-                          <td>
+                          <td className="col-priority">
                             <span
                               className={`priority ${
                                 PRIORITY_CLASS[report.priorityKey] || 'medium'
@@ -721,9 +724,10 @@ export default function App() {
                             <button
                               className="detail-button"
                               onClick={() => setSelected(report.id)}
+                              aria-label={`Ver detalle de ${report.id}`}
                             >
-                              Ver detalle
-                              <ChevronRight size={14} />
+                              <span className="detail-label">Ver detalle</span>
+                              <ChevronRight size={14} aria-hidden="true" />
                             </button>
                           </td>
                         </tr>
@@ -811,7 +815,8 @@ export default function App() {
             </h2>
             <div className="detail-badges">
               <Badge statusKey={current.statusKey} />
-              <span className="priority">
+              <span className={`priority ${PRIORITY_CLASS[current.priorityKey] || 'medium'}`}>
+                <i />
                 Prioridad {(PRIORITY_LABELS[current.priorityKey] || 'Media').toLowerCase()}
               </span>
             </div>

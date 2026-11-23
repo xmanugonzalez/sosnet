@@ -190,7 +190,7 @@ export default function SosForm() {
                 <div><dt><FileText size={20} aria-hidden="true" />Emergencia</dt><dd>{receipt.type}</dd></div>
                 <div className="sos-receipt-location"><dt><MapPin size={20} aria-hidden="true" />Ubicación</dt><dd>{receipt.location}</dd></div>
                 <div><dt><Users size={20} aria-hidden="true" />Personas afectadas</dt><dd>{receipt.people}</dd></div>
-                <div><dt><AlertTriangle size={20} aria-hidden="true" />Prioridad</dt><dd>{PRIORITIES.find(option => option.value === receipt.priority)?.label || 'Media'}</dd></div>
+                <div><dt><AlertTriangle size={20} aria-hidden="true" />Prioridad</dt><dd><span className={`priority ${receipt.priority === 'alta' ? 'high' : receipt.priority === 'baja' ? 'low' : 'medium'}`}><i />{PRIORITIES.find(option => option.value === receipt.priority)?.label || 'Media'}</span></dd></div>
               </dl>
               <aside className="sos-safety-note"><Info size={24} aria-hidden="true" /><div><strong>Mantenete en un lugar seguro.</strong><p>La central podrá coordinar la asistencia. El registro no confirma que un equipo ya esté en camino.</p></div></aside>
               <button className="sos-another" type="button" onClick={resetForm}>Enviar otra solicitud<Plus size={18} aria-hidden="true" /></button>

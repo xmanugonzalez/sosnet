@@ -118,7 +118,7 @@ export default function AdminPanel({
             <h2>Equipo de la central</h2>
             <p>Crea cuentas y controla quién puede ingresar al sistema.</p>
           </div>
-          <Users size={23} />
+          <span className="section-icon"><Users size={19} aria-hidden="true" /></span>
         </div>
         <div className="admin-content">
           <div className="admin-info">
@@ -223,7 +223,7 @@ export default function AdminPanel({
             <h2>Configuración de la central</h2>
             <p>Personaliza la identificación de tu centro de operaciones.</p>
           </div>
-          <Settings size={23} />
+          <span className="section-icon"><Settings size={19} aria-hidden="true" /></span>
         </div>
         <form className="admin-content settings-form" onSubmit={saveSettings}>
           <label className="form-field">
@@ -282,7 +282,7 @@ export default function AdminPanel({
           <h2>Actividad de la central</h2>
           <p>Auditoría de accesos, cuentas, configuración y cambios de estado.</p>
         </div>
-        <ShieldCheck size={23} />
+        <span className="section-icon"><ShieldCheck size={19} aria-hidden="true" /></span>
       </div>
       <div className="admin-content">
         <div className="admin-info">
