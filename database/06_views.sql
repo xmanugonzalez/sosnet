@@ -1,4 +1,6 @@
+-- Vistas de solo lectura para el panel y los reportes.
 
+-- Solicitudes con tipo, dispositivo y cuántas comunicaciones tienen.
 DROP VIEW IF EXISTS reportes.vw_solicitudes_detalladas CASCADE;
 CREATE VIEW reportes.vw_solicitudes_detalladas
 WITH (security_invoker = true)
@@ -31,6 +33,7 @@ JOIN public.dispositivos AS d ON d.id_dispositivo = s.id_dispositivo;
 COMMENT ON VIEW reportes.vw_solicitudes_detalladas IS
   'Solicitudes con tipo de emergencia, dispositivo y cantidad de comunicaciones.';
 
+-- Totales y porcentajes por tipo de emergencia.
 DROP VIEW IF EXISTS reportes.vw_solicitudes_por_tipo CASCADE;
 CREATE VIEW reportes.vw_solicitudes_por_tipo
 WITH (security_invoker = true)
@@ -56,6 +59,7 @@ ORDER BY count(s.id_solicitud) DESC, t.nombre;
 COMMENT ON VIEW reportes.vw_solicitudes_por_tipo IS
   'Agregado por tipo: total, estados, personas y porcentaje del total.';
 
+-- Cambios de estado con el operador que los hizo.
 DROP VIEW IF EXISTS reportes.vw_historial_solicitudes CASCADE;
 CREATE VIEW reportes.vw_historial_solicitudes
 WITH (security_invoker = true)
@@ -77,6 +81,7 @@ JOIN public.usuarios AS u ON u.id_usuario = h.id_usuario;
 COMMENT ON VIEW reportes.vw_historial_solicitudes IS
   'Historial de estados con el código de la solicitud y el operador responsable.';
 
+-- Auditoría con el nombre y rol del actor.
 DROP VIEW IF EXISTS reportes.vw_actividad_usuarios CASCADE;
 CREATE VIEW reportes.vw_actividad_usuarios
 WITH (security_invoker = true)
@@ -96,6 +101,7 @@ LEFT JOIN public.usuarios AS u ON u.id_usuario = a.id_usuario;
 COMMENT ON VIEW reportes.vw_actividad_usuarios IS
   'Auditoría enriquecida con el nombre y rol del actor.';
 
+-- Resumen general en una fila: estados, prioridades y últimas 24 horas.
 DROP VIEW IF EXISTS reportes.vw_estadisticas_emergencias CASCADE;
 CREATE VIEW reportes.vw_estadisticas_emergencias
 WITH (security_invoker = true)
@@ -120,6 +126,7 @@ FROM public.solicitudes_sos;
 COMMENT ON VIEW reportes.vw_estadisticas_emergencias IS
   'Resumen de una fila para el panel administrativo y consultas académicas.';
 
+-- Cuántas solicitudes generó cada dispositivo.
 DROP VIEW IF EXISTS reportes.vw_resumen_dispositivos CASCADE;
 CREATE VIEW reportes.vw_resumen_dispositivos
 WITH (security_invoker = true)

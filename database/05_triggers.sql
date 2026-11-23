@@ -1,5 +1,8 @@
+-- Disparadores automáticos: fechas de modificación, historial de estados y auditoría.
+
 -- 1. Fecha de modificación de solicitudes
 
+-- Actualiza la fecha de modificación en cada cambio.
 CREATE OR REPLACE FUNCTION public.trg_fn_solicitud_actualizada()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -25,10 +28,12 @@ DECLARE
     v_usuario integer;
     v_observacion varchar(255);
 BEGIN
+    -- Durante una migración se omite la auditoría.
     IF current_setting('app.migration_mode', true) = 'true' THEN
         RETURN NULL;
     END IF;
 
+    -- Usuario que hizo el cambio; si no hay, usa la cuenta 'sistema'.
     v_usuario := COALESCE(
         public.fn_usuario_actual(),
         public.fn_usuario_sistema_id()
@@ -38,11 +43,13 @@ BEGIN
         RAISE EXCEPTION 'No hay usuario para registrar el cambio de estado';
     END IF;
 
+    -- Toma la observación que dejó el procedimiento.
     v_observacion := NULLIF(
         left(COALESCE(current_setting('app.current_observation', true), ''), 255),
         ''
     );
 
+    -- Guarda el cambio en el historial.
     INSERT INTO auditoria.historial_estados (
         id_solicitud,
         id_usuario,
@@ -60,6 +67,7 @@ BEGIN
         v_observacion
     );
 
+    -- Guarda también la actividad con texto legible.
     INSERT INTO auditoria.actividad (
         id_usuario,
         accion,
@@ -125,6 +133,7 @@ BEGIN
         RETURN NULL;
     END IF;
 
+    -- Decide la acción y el mensaje según INSERT, UPDATE o DELETE.
     IF TG_OP = 'INSERT' THEN
         v_accion := 'user_create';
         v_desc := left(
@@ -132,6 +141,7 @@ BEGIN
             255
         );
     ELSIF TG_OP = 'UPDATE' THEN
+        -- Detecta qué campos cambiaron.
         v_cambios := concat_ws(
             ', ',
             CASE WHEN OLD.nombre IS DISTINCT FROM NEW.nombre THEN 'nombre' END,
@@ -180,9 +190,8 @@ $$;
 COMMENT ON FUNCTION auditoria.trg_fn_usuarios_auditoria() IS
   'Audita creación, cambios relevantes y eliminación de cuentas.';
 
--- ----------------------------------------------------------------------------
 -- 4 y 5. Configuración de la central
--- ----------------------------------------------------------------------------
+-- Actualiza la fecha de modificación de la configuración.
 CREATE OR REPLACE FUNCTION public.trg_fn_configuracion_actualizada()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -193,6 +202,7 @@ BEGIN
 END;
 $$;
 
+-- Registra quién cambió la configuración.
 CREATE OR REPLACE FUNCTION auditoria.trg_fn_configuracion_auditoria()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -232,15 +242,15 @@ BEGIN
 END;
 $$;
 
--- ----------------------------------------------------------------------------
 -- Creación de triggers
--- ----------------------------------------------------------------------------
+-- Antes de actualizar una solicitud, cambia actualizado_en.
 DROP TRIGGER IF EXISTS trg_solicitud_actualizada ON public.solicitudes_sos;
 CREATE TRIGGER trg_solicitud_actualizada
     BEFORE UPDATE ON public.solicitudes_sos
     FOR EACH ROW
     EXECUTE FUNCTION public.trg_fn_solicitud_actualizada();
 
+-- Si cambia el estado, guarda historial y actividad.
 DROP TRIGGER IF EXISTS trg_sos_historial_estado ON public.solicitudes_sos;
 CREATE TRIGGER trg_sos_historial_estado
     AFTER UPDATE OF estado ON public.solicitudes_sos
@@ -248,6 +258,7 @@ CREATE TRIGGER trg_sos_historial_estado
     WHEN (OLD.estado IS DISTINCT FROM NEW.estado)
     EXECUTE FUNCTION auditoria.trg_fn_historial_estado();
 
+-- Audita altas, cambios y bajas de cuentas.
 DROP TRIGGER IF EXISTS trg_usuarios_auditoria ON public.usuarios;
 CREATE TRIGGER trg_usuarios_auditoria
     AFTER INSERT OR UPDATE OF nombre, usuario, correo, rol, activo, contrasena OR DELETE
@@ -255,6 +266,7 @@ CREATE TRIGGER trg_usuarios_auditoria
     FOR EACH ROW
     EXECUTE FUNCTION auditoria.trg_fn_usuarios_auditoria();
 
+-- Configuración: fecha automática y auditoría.
 DROP TRIGGER IF EXISTS trg_configuracion_actualizada ON public.configuracion_central;
 CREATE TRIGGER trg_configuracion_actualizada
     BEFORE UPDATE ON public.configuracion_central
@@ -268,6 +280,7 @@ CREATE TRIGGER trg_configuracion_auditoria
     WHEN (OLD.nombre IS DISTINCT FROM NEW.nombre OR OLD.ubicacion IS DISTINCT FROM NEW.ubicacion)
     EXECUTE FUNCTION auditoria.trg_fn_configuracion_auditoria();
 
+-- Las funciones de trigger no se ejecutan a mano.
 REVOKE ALL ON FUNCTION public.trg_fn_solicitud_actualizada() FROM PUBLIC;
 REVOKE ALL ON FUNCTION auditoria.trg_fn_historial_estado() FROM PUBLIC;
 REVOKE ALL ON FUNCTION auditoria.trg_fn_usuarios_auditoria() FROM PUBLIC;

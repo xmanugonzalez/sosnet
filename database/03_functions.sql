@@ -1,4 +1,6 @@
+-- Funciones de apoyo: usuario y rol actuales, datos del JWT, login y reportes.
 
+-- Devuelve el ID de usuario que Flask guarda en la sesión de la base.
 CREATE OR REPLACE FUNCTION public.fn_usuario_actual()
 RETURNS integer
 LANGUAGE sql
@@ -10,6 +12,7 @@ $$;
 COMMENT ON FUNCTION public.fn_usuario_actual() IS
   'ID del usuario de SOSNET fijado por Flask para la transacción actual.';
 
+-- Devuelve el rol (admin, operador o sistema) guardado por Flask.
 CREATE OR REPLACE FUNCTION public.fn_rol_actual()
 RETURNS text
 LANGUAGE sql
@@ -21,6 +24,7 @@ $$;
 COMMENT ON FUNCTION public.fn_rol_actual() IS
   'Rol funcional (admin/operador/sistema) fijado por Flask para RLS.';
 
+-- Devuelve los datos del JWT externo como JSON; NULL si no hay.
 CREATE OR REPLACE FUNCTION public.fn_jwt_claims()
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -44,6 +48,7 @@ $$;
 COMMENT ON FUNCTION public.fn_jwt_claims() IS
   'Claims JWT que publican los clientes externos en request.jwt.claims.';
 
+-- Extrae un dato del JWT, por ejemplo 'sub' o 'role'.
 CREATE OR REPLACE FUNCTION public.fn_jwt_claim(p_claim text)
 RETURNS text
 LANGUAGE sql
@@ -55,6 +60,7 @@ $$;
 COMMENT ON FUNCTION public.fn_jwt_claim(text) IS
   'Valor de un claim JWT de primer nivel, o NULL.';
 
+-- Busca el rol dentro del JWT; si no existe, devuelve 'anon'.
 CREATE OR REPLACE FUNCTION public.fn_jwt_role()
 RETURNS text
 LANGUAGE sql
@@ -71,6 +77,7 @@ $$;
 COMMENT ON FUNCTION public.fn_jwt_role() IS
   'Rol funcional transportado en el JWT externo (app_metadata.role).';
 
+-- Encuentra la cuenta local a partir del UID del JWT externo.
 CREATE OR REPLACE FUNCTION public.fn_usuario_externo_actual()
 RETURNS integer
 LANGUAGE sql
@@ -88,6 +95,7 @@ $$;
 COMMENT ON FUNCTION public.fn_usuario_externo_actual() IS
   'Mapea un UID externo opcional con la fila correspondiente de public.usuarios.';
 
+-- ID de la cuenta interna 'sistema', usada cuando no hay usuario en sesión.
 CREATE OR REPLACE FUNCTION public.fn_usuario_sistema_id()
 RETURNS integer
 LANGUAGE sql
@@ -104,6 +112,7 @@ $$;
 COMMENT ON FUNCTION public.fn_usuario_sistema_id() IS
   'Cuenta interna usada como actor de respaldo en triggers de auditoría.';
 
+-- Devuelve solo nombre y rol, sin contraseña ni correo.
 CREATE OR REPLACE FUNCTION public.fn_usuario_directorio(p_id_usuario integer)
 RETURNS TABLE (
     nombre varchar,
@@ -123,9 +132,8 @@ $$;
 COMMENT ON FUNCTION public.fn_usuario_directorio(integer) IS
   'Devuelve solo nombre y rol para reportes/historial; nunca el hash ni el correo.';
 
--- ----------------------------------------------------------------------------
 -- Utilidades
--- ----------------------------------------------------------------------------
+-- Crea códigos como SOS-20251123153000-A1B2C3.
 CREATE OR REPLACE FUNCTION public.fn_generar_codigo_mensaje()
 RETURNS text
 LANGUAGE sql
@@ -140,9 +148,8 @@ $$;
 COMMENT ON FUNCTION public.fn_generar_codigo_mensaje() IS
   'Genera un código único legible para una solicitud SOS.';
 
--- ----------------------------------------------------------------------------
 -- Login: búsqueda previa a la autenticación
--- ----------------------------------------------------------------------------
+-- Busca la cuenta por correo o usuario; Flask valida la contraseña.
 CREATE OR REPLACE FUNCTION public.fn_login_usuario(p_identifier text)
 RETURNS TABLE (
     id_usuario    integer,
@@ -177,9 +184,8 @@ $$;
 COMMENT ON FUNCTION public.fn_login_usuario(text) IS
   'Devuelve la cuenta para validar la contraseña en Flask. Solo para sosnet_api.';
 
--- ----------------------------------------------------------------------------
 -- Funciones escalares de reporte (un único valor)
--- ----------------------------------------------------------------------------
+-- Total de solicitudes registradas.
 CREATE OR REPLACE FUNCTION reportes.fn_total_solicitudes()
 RETURNS bigint
 LANGUAGE sql
@@ -188,6 +194,7 @@ AS $$
     SELECT count(*) FROM public.solicitudes_sos;
 $$;
 
+-- Cuántas solicitudes siguen pendientes.
 CREATE OR REPLACE FUNCTION reportes.fn_solicitudes_pendientes()
 RETURNS bigint
 LANGUAGE sql
@@ -196,6 +203,7 @@ AS $$
     SELECT count(*) FROM public.solicitudes_sos WHERE estado = 'pending';
 $$;
 
+-- Cuántos dispositivos están activos.
 CREATE OR REPLACE FUNCTION reportes.fn_dispositivos_activos()
 RETURNS bigint
 LANGUAGE sql
@@ -204,6 +212,7 @@ AS $$
     SELECT count(*) FROM public.dispositivos WHERE estado = 'activo';
 $$;
 
+-- Cuenta solicitudes entre dos fechas; valida el rango.
 CREATE OR REPLACE FUNCTION reportes.fn_solicitudes_periodo(
     p_desde timestamptz,
     p_hasta timestamptz
@@ -234,9 +243,8 @@ $$;
 COMMENT ON FUNCTION reportes.fn_solicitudes_periodo(timestamptz, timestamptz) IS
   'Cantidad de solicitudes recibidas en un rango [desde, hasta).';
 
--- ----------------------------------------------------------------------------
--- Funciones que retornan tablas (RETURNS TABLE)
--- ----------------------------------------------------------------------------
+-- Funciones que retornan tablas.
+-- Lista las solicitudes de un estado con su tipo y dispositivo.
 CREATE OR REPLACE FUNCTION reportes.fn_solicitudes_por_estado(p_estado text)
 RETURNS TABLE (
     id_solicitud      integer,
@@ -279,6 +287,7 @@ $$;
 COMMENT ON FUNCTION reportes.fn_solicitudes_por_estado(text) IS
   'Solicitudes de un estado con su tipo y dispositivo.';
 
+-- Historial completo de una solicitud, con el operador responsable.
 CREATE OR REPLACE FUNCTION reportes.fn_historial_solicitud(p_id_solicitud integer)
 RETURNS TABLE (
     id_historial    integer,
@@ -312,6 +321,7 @@ $$;
 COMMENT ON FUNCTION reportes.fn_historial_solicitud(integer) IS
   'Historial completo de una solicitud, del más antiguo al más reciente.';
 
+-- Lista solicitudes entre dos fechas; valida el rango.
 CREATE OR REPLACE FUNCTION reportes.fn_solicitudes_entre_fechas(
     p_desde timestamptz,
     p_hasta timestamptz
@@ -354,6 +364,7 @@ $$;
 COMMENT ON FUNCTION reportes.fn_solicitudes_entre_fechas(timestamptz, timestamptz) IS
   'Solicitudes recibidas en un rango de fechas con tipo y dispositivo.';
 
+-- Totales por tipo de emergencia: solicitudes y personas afectadas.
 CREATE OR REPLACE FUNCTION reportes.fn_estadisticas_por_tipo()
 RETURNS TABLE (
     tipo        varchar,
@@ -381,6 +392,7 @@ $$;
 COMMENT ON FUNCTION reportes.fn_estadisticas_por_tipo() IS
   'Agregado por tipo de emergencia: total, estados y personas afectadas.';
 
+-- Permisos: las funciones de sesión son públicas; las sensibles se bloquean.
 GRANT EXECUTE ON FUNCTION public.fn_usuario_actual() TO PUBLIC;
 GRANT EXECUTE ON FUNCTION public.fn_rol_actual() TO PUBLIC;
 GRANT EXECUTE ON FUNCTION public.fn_jwt_claims() TO PUBLIC;
@@ -388,6 +400,7 @@ GRANT EXECUTE ON FUNCTION public.fn_jwt_claim(text) TO PUBLIC;
 GRANT EXECUTE ON FUNCTION public.fn_jwt_role() TO PUBLIC;
 GRANT EXECUTE ON FUNCTION public.fn_usuario_externo_actual() TO PUBLIC;
 
+-- Se quitan permisos generales y luego se habilitan solo a los roles necesarios.
 REVOKE ALL ON FUNCTION public.fn_login_usuario(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_usuario_sistema_id() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_usuario_directorio(integer) FROM PUBLIC;

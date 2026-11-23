@@ -1,6 +1,9 @@
+-- Datos iniciales: tipos de emergencia, dispositivo, cuentas demo y configuración.
 
+-- Evita que la carga inicial llene la auditoría de eventos.
 SELECT set_config('app.audit_enabled', 'false', false);
 
+-- Tipos de emergencia básicos.
 INSERT INTO public.tipos_emergencia (nombre, descripcion) VALUES
     ('Inundación', 'Viviendas o zonas afectadas por agua'),
     ('Asistencia médica', 'Personas que necesitan atención médica urgente'),
@@ -9,10 +12,12 @@ INSERT INTO public.tipos_emergencia (nombre, descripcion) VALUES
     ('Otra', 'Emergencia no clasificada')
 ON CONFLICT (nombre) DO NOTHING;
 
+-- Dispositivo que representa al formulario web.
 INSERT INTO public.dispositivos (codigo, nombre, tipo, estado) VALUES
     ('FORMULARIO-SOS', 'Formulario web SOS', 'web', 'activo')
 ON CONFLICT (codigo) DO NOTHING;
 
+-- Cuenta demo de operador: operador@sosnet.local / OperadorDemo123.
 INSERT INTO public.usuarios (
     nombre, usuario, correo, contrasena, rol, activo, fecha_registro
 )
@@ -28,6 +33,7 @@ WHERE NOT EXISTS (
     SELECT 1 FROM public.usuarios WHERE lower(usuario) = 'operador'
 );
 
+-- Cuenta demo de administrador: admin@sosnet.local / AdminDemo123.
 INSERT INTO public.usuarios (
     nombre, usuario, correo, contrasena, rol, activo, fecha_registro
 )
@@ -43,6 +49,7 @@ WHERE NOT EXISTS (
     SELECT 1 FROM public.usuarios WHERE lower(usuario) = 'admin'
 );
 
+-- Cuenta interna del sistema: inactiva y sin acceso.
 INSERT INTO public.usuarios (
     nombre, usuario, correo, contrasena, rol, activo, fecha_registro
 )
@@ -58,6 +65,7 @@ WHERE NOT EXISTS (
     SELECT 1 FROM public.usuarios WHERE lower(usuario) = 'sistema'
 );
 
+-- Datos de la central (solo existe la fila 1).
 INSERT INTO public.configuracion_central (
     id_configuracion, nombre, ubicacion, actualizado_en
 )
@@ -66,4 +74,5 @@ VALUES (
 )
 ON CONFLICT (id_configuracion) DO NOTHING;
 
+-- Reactiva la auditoría para el uso normal.
 SELECT set_config('app.audit_enabled', 'true', false);

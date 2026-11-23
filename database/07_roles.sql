@@ -1,4 +1,6 @@
+-- Crea los roles de la base y les da permisos mínimos según su función.
 
+-- Crear los roles si no existen.
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sosnet_api') THEN
@@ -19,9 +21,11 @@ BEGIN
 END;
 $$;
 
+-- Los roles no son superusuarios y RLS siempre les aplica.
 ALTER ROLE sosnet_api NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
 ALTER ROLE sosnet_reporte NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
 
+-- Permite que los roles se conecten a esta base.
 DO $$
 BEGIN
     EXECUTE format(
@@ -31,13 +35,13 @@ BEGIN
 END;
 $$;
 
+-- El público no puede crear objetos en public; solo usar los esquemas.
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public, auditoria, reportes
     TO sosnet_api, sosnet_reporte, anon, authenticated;
 
--- ----------------------------------------------------------------------------
 -- sosnet_api: DML controlado por RLS, sin DDL
--- ----------------------------------------------------------------------------
+-- La API puede leer y escribir datos, pero RLS filtra las filas.
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO sosnet_api;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO sosnet_api;
 GRANT SELECT ON ALL TABLES IN SCHEMA auditoria TO sosnet_api;
@@ -59,10 +63,8 @@ GRANT EXECUTE ON PROCEDURE public.sp_logout_usuario(integer) TO sosnet_api;
 GRANT EXECUTE ON PROCEDURE public.sp_purgar_solicitudes_antiguas(integer, boolean, integer)
     TO sosnet_api;
 
--- ----------------------------------------------------------------------------
 -- anon / authenticated: privilegios para las pruebas de RLS.
 -- RLS decide qué filas y operaciones se permiten.
--- ----------------------------------------------------------------------------
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public
     TO anon, authenticated;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
@@ -70,18 +72,18 @@ GRANT SELECT ON ALL TABLES IN SCHEMA reportes TO authenticated;
 
 GRANT SELECT ON auditoria.actividad, auditoria.historial_estados TO authenticated;
 
--- ----------------------------------------------------------------------------
 -- Protección de hashes: ningún rol de cliente/API puede leer contrasena.
 -- La única vía es fn_login_usuario(), SECURITY DEFINER y solo para sosnet_api.
--- ----------------------------------------------------------------------------
 REVOKE ALL ON public.usuarios FROM anon;
 REVOKE ALL ON public.usuarios FROM authenticated;
 
+-- authenticated solo ve datos básicos, nunca la contraseña.
 GRANT SELECT (
     id_usuario, nombre, usuario, correo, rol, activo,
     ultimo_acceso, fecha_registro
 ) ON public.usuarios TO authenticated;
 
+-- sosnet_api ve token_version y external_uid, pero no la contraseña.
 REVOKE SELECT ON public.usuarios FROM sosnet_api;
 GRANT SELECT (
     id_usuario, nombre, usuario, correo, rol, activo,
@@ -96,9 +98,8 @@ GRANT EXECUTE ON PROCEDURE public.sp_registrar_solicitud(
 
 GRANT EXECUTE ON ALL ROUTINES IN SCHEMA reportes TO authenticated;
 
--- ----------------------------------------------------------------------------
 -- sosnet_reporte: solo datos operativos y agregados, nunca usuarios/hashes.
--- ----------------------------------------------------------------------------
+
 GRANT SELECT ON public.solicitudes_sos,
                 public.tipos_emergencia,
                 public.dispositivos,

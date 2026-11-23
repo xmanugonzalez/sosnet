@@ -1,4 +1,6 @@
+-- Procedimientos que agrupan operaciones completas: registrar, actualizar y auditar.
 
+-- Da de alta un dispositivo; si ya existe ese código, devuelve el mismo ID.
 CREATE OR REPLACE PROCEDURE public.sp_registrar_dispositivo(
     p_codigo text,
     INOUT p_id_dispositivo integer DEFAULT NULL,
@@ -16,11 +18,13 @@ DECLARE
     v_tipo   varchar(30);
     v_estado varchar(20);
 BEGIN
+    -- Limpia los datos y aplica valores por defecto.
     v_codigo := left(COALESCE(NULLIF(btrim(p_codigo), ''), 'DESCONOCIDO'), 50);
     v_nombre := left(COALESCE(NULLIF(btrim(p_nombre), ''), v_codigo), 100);
     v_tipo   := lower(COALESCE(NULLIF(btrim(p_tipo), ''), 'desconocido'));
     v_estado := lower(COALESCE(NULLIF(btrim(p_estado), ''), 'activo'));
 
+    -- Valida el tipo y el estado permitidos.
     IF v_tipo NOT IN ('web', 'desconocido') THEN
         RAISE EXCEPTION 'Tipo de dispositivo no válido: %', v_tipo
             USING ERRCODE = '22023';
@@ -30,10 +34,12 @@ BEGIN
             USING ERRCODE = '22023';
     END IF;
 
+    -- Inserta solo si el código no existe.
     INSERT INTO public.dispositivos (codigo, nombre, tipo, estado)
     VALUES (v_codigo, v_nombre, v_tipo, v_estado)
     ON CONFLICT (codigo) DO NOTHING;
 
+    -- Devuelve el ID del dispositivo nuevo o del existente.
     SELECT d.id_dispositivo
     INTO p_id_dispositivo
     FROM public.dispositivos AS d
@@ -47,6 +53,7 @@ COMMENT ON PROCEDURE public.sp_registrar_dispositivo(text, integer, text, text, 
 -- ----------------------------------------------------------------------------
 -- Registrar una comunicación recibida
 -- ----------------------------------------------------------------------------
+-- Guarda la recepción de un mensaje SOS para una solicitud existente.
 CREATE OR REPLACE PROCEDURE public.sp_registrar_comunicacion(
     p_id_solicitud integer,
     p_id_dispositivo integer,
@@ -65,16 +72,19 @@ BEGIN
     v_estado := lower(COALESCE(NULLIF(btrim(p_estado_recepcion), ''), 'recibido'));
     v_fecha  := COALESCE(p_fecha_recepcion, now());
 
+    -- Valida el estado de recepción permitido.
     IF v_estado NOT IN ('recibido', 'duplicado', 'error') THEN
         RAISE EXCEPTION 'Estado de recepción no válido: %', v_estado
             USING ERRCODE = '22023';
     END IF;
+    -- Verifica que la solicitud exista.
     IF NOT EXISTS (
         SELECT 1 FROM public.solicitudes_sos WHERE id_solicitud = p_id_solicitud
     ) THEN
         RAISE EXCEPTION 'Solicitud % no encontrada', p_id_solicitud
             USING ERRCODE = 'P0002';
     END IF;
+    -- Verifica que el dispositivo exista.
     IF NOT EXISTS (
         SELECT 1 FROM public.dispositivos WHERE id_dispositivo = p_id_dispositivo
     ) THEN
@@ -82,6 +92,7 @@ BEGIN
             USING ERRCODE = 'P0002';
     END IF;
 
+    -- Inserta el registro de recepción y devuelve su ID.
     INSERT INTO public.registros_comunicacion (
         id_solicitud, id_dispositivo, fecha_recepcion, estado_recepcion
     )
@@ -96,6 +107,7 @@ COMMENT ON PROCEDURE public.sp_registrar_comunicacion(integer, integer, text, ti
 -- ----------------------------------------------------------------------------
 -- Registrar una solicitud SOS completa
 -- ----------------------------------------------------------------------------
+-- Crea la solicitud y su comunicación; crea el tipo y el dispositivo si faltan.
 CREATE OR REPLACE PROCEDURE public.sp_registrar_solicitud(
     p_codigo_mensaje text,
     p_nombre_solicitante text,
@@ -126,6 +138,7 @@ DECLARE
     v_id_dispositivo  integer;
     v_id_registro     integer;
 BEGIN
+    -- Limpia los textos y aplica valores por defecto.
     v_codigo := left(
         COALESCE(NULLIF(btrim(p_codigo_mensaje), ''), public.fn_generar_codigo_mensaje()),
         50
@@ -148,6 +161,7 @@ BEGIN
     v_personas := COALESCE(p_cantidad_personas, 1);
     v_fecha := COALESCE(p_fecha_recepcion, now());
 
+    -- Valida la cantidad de personas y la prioridad.
     IF v_personas < 1 OR v_personas > 1000 THEN
         RAISE EXCEPTION 'La cantidad de personas debe estar entre 1 y 1000'
             USING ERRCODE = '22023';
@@ -157,11 +171,13 @@ BEGIN
             USING ERRCODE = '22023';
     END IF;
 
+    -- Crea el tipo si no existe y obtiene su ID.
     INSERT INTO public.tipos_emergencia (nombre)
     VALUES (v_tipo)
     ON CONFLICT (nombre) DO UPDATE SET nombre = EXCLUDED.nombre
     RETURNING id_tipo INTO v_id_tipo;
 
+    -- Asegura el dispositivo y obtiene su ID.
     CALL public.sp_registrar_dispositivo(
         p_codigo => v_dispositivo,
         p_id_dispositivo => v_id_dispositivo,
@@ -170,6 +186,7 @@ BEGIN
         p_estado => 'activo'
     );
 
+    -- Inserta la solicitud en estado pendiente.
     INSERT INTO public.solicitudes_sos (
         codigo_mensaje,
         nombre_solicitante,
@@ -196,6 +213,7 @@ BEGIN
     )
     RETURNING id_solicitud INTO p_id_solicitud;
 
+    -- Registra la comunicación de recepción.
     CALL public.sp_registrar_comunicacion(
         p_id_solicitud => p_id_solicitud,
         p_id_dispositivo => v_id_dispositivo,
@@ -212,6 +230,7 @@ COMMENT ON PROCEDURE public.sp_registrar_solicitud(text, text, text, text, text,
 -- ----------------------------------------------------------------------------
 -- Actualizar el estado de una solicitud
 -- ----------------------------------------------------------------------------
+-- Cambia el estado; el trigger guarda el historial y la auditoría.
 CREATE OR REPLACE PROCEDURE public.sp_actualizar_estado(
     p_id_solicitud integer,
     p_nuevo_estado text,
@@ -226,12 +245,14 @@ DECLARE
     v_estado_anterior varchar(30);
     v_nuevo_estado    varchar(30);
 BEGIN
+    -- Valida el estado nuevo.
     v_nuevo_estado := lower(COALESCE(NULLIF(btrim(p_nuevo_estado), ''), ''));
     IF v_nuevo_estado NOT IN ('pending', 'in_progress', 'resolved') THEN
         RAISE EXCEPTION 'Estado no válido: %', p_nuevo_estado
             USING ERRCODE = '22023';
     END IF;
 
+    -- Solo un admin u operador activo puede cambiar estados.
     IF NOT EXISTS (
         SELECT 1
         FROM public.usuarios
@@ -243,6 +264,7 @@ BEGIN
             USING ERRCODE = '42501';
     END IF;
 
+    -- Bloquea la fila y obtiene su estado actual.
     SELECT estado
     INTO v_estado_anterior
     FROM public.solicitudes_sos
@@ -254,10 +276,12 @@ BEGIN
             USING ERRCODE = 'P0002';
     END IF;
 
+    -- Si no cambia el estado, no hace nada.
     IF v_estado_anterior = v_nuevo_estado THEN
         RETURN;
     END IF;
 
+    -- Deja listos el usuario y la observación para el trigger.
     PERFORM set_config('app.current_user_id', p_id_usuario::text, true);
     PERFORM set_config(
         'app.current_observation',
@@ -279,6 +303,7 @@ COMMENT ON PROCEDURE public.sp_actualizar_estado(integer, text, integer, text) I
 -- ----------------------------------------------------------------------------
 -- Registrar actividad de auditoría (login, logout, acciones de la API)
 -- ----------------------------------------------------------------------------
+-- Inserta un evento en auditoria.actividad.
 CREATE OR REPLACE PROCEDURE public.sp_registrar_actividad(
     p_id_usuario integer,
     p_accion text,
@@ -295,6 +320,7 @@ DECLARE
     v_descripcion varchar(255);
     v_entidad     varchar(40);
 BEGIN
+    -- Limpia los textos y aplica valores por defecto.
     v_accion := left(COALESCE(NULLIF(btrim(p_accion), ''), 'evento'), 50);
     v_descripcion := left(
         COALESCE(NULLIF(btrim(p_descripcion), ''), 'Evento registrado'),
@@ -302,6 +328,7 @@ BEGIN
     );
     v_entidad := left(NULLIF(btrim(p_entidad), ''), 40);
 
+    -- Si viene un usuario, comprueba que exista.
     IF p_id_usuario IS NOT NULL AND NOT EXISTS (
         SELECT 1 FROM public.usuarios WHERE id_usuario = p_id_usuario
     ) THEN
@@ -324,6 +351,7 @@ COMMENT ON PROCEDURE public.sp_registrar_actividad(integer, text, text, text, in
 -- ----------------------------------------------------------------------------
 -- Login correcto: actualizar último acceso y auditar
 -- ----------------------------------------------------------------------------
+-- Marca el último acceso y registra el login.
 CREATE OR REPLACE PROCEDURE public.sp_login_exitoso(p_id_usuario integer)
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -354,6 +382,7 @@ COMMENT ON PROCEDURE public.sp_login_exitoso(integer) IS
 -- ----------------------------------------------------------------------------
 -- Logout: invalida los JWT anteriores y audita
 -- ----------------------------------------------------------------------------
+-- Sube token_version para anular tokens viejos y registra el logout.
 CREATE OR REPLACE PROCEDURE public.sp_logout_usuario(p_id_usuario integer)
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -383,6 +412,7 @@ COMMENT ON PROCEDURE public.sp_logout_usuario(integer) IS
 -- ----------------------------------------------------------------------------
 -- Retención de solicitudes antiguas
 -- ----------------------------------------------------------------------------
+-- Borra solicitudes fuera del período; con dry_run solo cuenta.
 CREATE OR REPLACE PROCEDURE public.sp_purgar_solicitudes_antiguas(
     p_dias integer,
     p_dry_run boolean,
@@ -398,6 +428,7 @@ BEGIN
             USING ERRCODE = '22023';
     END IF;
 
+    -- Solo cuenta, sin borrar.
     IF p_dry_run THEN
         SELECT count(*)
         INTO p_eliminadas
@@ -406,6 +437,7 @@ BEGIN
         RETURN;
     END IF;
 
+    -- Borra; comunicaciones e historial caen por CASCADE.
     DELETE FROM public.solicitudes_sos
     WHERE fecha_recepcion < now() - make_interval(days => p_dias);
 
@@ -416,7 +448,7 @@ $$;
 COMMENT ON PROCEDURE public.sp_purgar_solicitudes_antiguas(integer, boolean, integer) IS
   'Elimina solicitudes fuera de retención; los registros e historial caen por CASCADE.';
 
--- Ejecución restringida: los grants explícitos se definen en 07_roles.sql.
+-- Limpieza final: quita permisos generales; 07_roles.sql da los permisos justos.
 REVOKE ALL ON PROCEDURE public.sp_registrar_dispositivo(text, integer, text, text, text) FROM PUBLIC;
 REVOKE ALL ON PROCEDURE public.sp_registrar_comunicacion(integer, integer, text, timestamptz, integer) FROM PUBLIC;
 REVOKE ALL ON PROCEDURE public.sp_registrar_solicitud(text, text, text, text, text, integer, text, text, timestamptz, integer) FROM PUBLIC;
